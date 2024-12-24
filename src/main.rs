@@ -1,3 +1,4 @@
+use vulkan::context::Context;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -5,8 +6,11 @@ use winit::{
     window::{Window, WindowAttributes, WindowId},
 };
 
+mod vulkan;
+
 struct App {
     window: Option<Window>,
+    context: Context,
 }
 
 impl ApplicationHandler for App {
@@ -37,6 +41,11 @@ fn main() {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = App { window: None };
+    let vk_context = Context::new().expect("Vulkan context initialization failed.");
+
+    let mut app = App {
+        window: None,
+        context: vk_context,
+    };
     let _ = event_loop.run_app(&mut app);
 }

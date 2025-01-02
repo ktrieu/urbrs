@@ -8,12 +8,12 @@ use winit::{
 
 mod vulkan;
 
-struct App {
+struct App<'a> {
     window: Option<Window>,
-    context: Context,
+    context: Context<'a>,
 }
 
-impl ApplicationHandler for App {
+impl<'a> ApplicationHandler for App<'a> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.window = Some(
             event_loop

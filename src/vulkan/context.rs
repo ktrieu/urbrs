@@ -1,10 +1,12 @@
 use ash::{Entry, Instance};
 
+use super::device::Device;
 use super::phys_device::PhysicalDevice;
 
 pub struct Context<'a> {
     instance: Instance,
-    phys_device: PhysicalDevice<'a>,
+    device: Device<'a>,
+}
 }
 
 impl<'a> Context<'a> {
@@ -22,14 +24,14 @@ impl<'a> Context<'a> {
         let phys_device = PhysicalDevice::select_device(&instance)
             .expect("physical device selection should succeed")
             .expect("suitable physical device should exist");
+
         let phys_device_name = phys_device.name();
+        println!("Selected physical device {phys_device_name}");
 
-        println!("Selected device {phys_device_name}");
+        let device =
+            Device::new(&instance, phys_device).expect("logical device creation should succeed");
 
-        Ok(Self {
-            instance,
-            phys_device,
-        })
+        Ok(Self { instance, device })
     }
 
     pub fn instance(&self) -> &Instance {

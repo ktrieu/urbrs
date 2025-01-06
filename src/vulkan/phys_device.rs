@@ -9,20 +9,22 @@ pub struct PhysicalDevice<'a> {
     extensions: Vec<ash::vk::ExtensionProperties>,
     queue_families: Vec<ash::vk::QueueFamilyProperties2<'a>>,
 
-    graphics_families: Vec<usize>,
-    transfer_families: Vec<usize>,
+    graphics_family: u32,
+    transfer_family: u32,
 }
 
-fn get_queue_families_with_flag(
-    families: &Vec<ash::vk::QueueFamilyProperties2>,
+fn get_queue_families_with_flag<'a>(
+    families: &'a Vec<ash::vk::QueueFamilyProperties2>,
     flag: ash::vk::QueueFlags,
-) -> Vec<usize> {
+) -> impl Iterator<Item = u32> + 'a {
     families
         .iter()
         .enumerate()
-        .filter(|(_, f)| f.queue_family_properties.queue_flags.contains(flag))
-        .map(|(i, _)| i)
-        .collect()
+        .filter(move |(_, f)| f.queue_family_properties.queue_flags.contains(flag))
+        .map(|(i, _)| {
+            i.try_into()
+                .expect("queue family index should fit into an u32")
+        })
 }
 
 fn is_extension_supported(extensions: &Vec<ash::vk::ExtensionProperties>, name: &CStr) -> bool {
@@ -36,6 +38,23 @@ fn is_extension_supported(extensions: &Vec<ash::vk::ExtensionProperties>, name: 
             }
         })
         .is_some()
+}
+
+fn select_graphics_family(queue_families: &Vec<ash::vk::QueueFamilyProperties2>) -> Option<u32> {
+    // Just return any family with graphics support.
+    get_queue_families_with_flag(queue_families, ash::vk::QueueFlags::GRAPHICS).next()
+}
+
+fn select_transfer_family(
+    queue_families: &Vec<ash::vk::QueueFamilyProperties2>,
+    graphics_family: u32,
+) -> u32 {
+    // Try and find a family that isn't our graphics family,
+    // But fall back to the graphics family.
+    get_queue_families_with_flag(queue_families, ash::vk::QueueFlags::TRANSFER)
+        .filter(|f| *f != graphics_family)
+        .next()
+        .unwrap_or(graphics_family)
 }
 
 impl<'a> PhysicalDevice<'a> {
@@ -55,7 +74,7 @@ impl<'a> PhysicalDevice<'a> {
         return Ok(devices.next());
     }
 
-    const REQUIRED_EXTENSIONS: &'static [&'static CStr; 3] = &[
+    pub const REQUIRED_EXTENSIONS: &'static [&'static CStr; 3] = &[
         ash::vk::KHR_SWAPCHAIN_NAME,
         ash::vk::KHR_DYNAMIC_RENDERING_NAME,
         ash::vk::KHR_SYNCHRONIZATION2_NAME,
@@ -88,22 +107,26 @@ impl<'a> PhysicalDevice<'a> {
         instance
             .get_physical_device_queue_family_properties2(handle, queue_families.as_mut_slice());
 
-        let graphics_families =
-            get_queue_families_with_flag(&queue_families, ash::vk::QueueFlags::GRAPHICS);
-        let transfer_families =
-            get_queue_families_with_flag(&queue_families, ash::vk::QueueFlags::TRANSFER);
+        let graphics_family = match select_graphics_family(&queue_families) {
+            Some(f) => f,
+            None => return Ok(None),
+        };
+
+        let transfer_family = select_transfer_family(&queue_families, graphics_family);
 
         // TODO: surface properties...
 
-        return Ok(Some(Self {
+        let phys_device = Self {
             handle,
             properties,
             features,
             extensions,
             queue_families,
-            graphics_families,
-            transfer_families,
-        }));
+            graphics_family,
+            transfer_family,
+        };
+
+        Ok(Some(phys_device))
     }
 
     pub fn name(&self) -> &str {
@@ -113,5 +136,17 @@ impl<'a> PhysicalDevice<'a> {
             .expect("device name should be valid CStr")
             .to_str()
             .expect("device name should be valid UTF-8")
+    }
+
+    pub fn handle(&self) -> ash::vk::PhysicalDevice {
+        self.handle
+    }
+
+    pub fn graphics_family(&self) -> u32 {
+        self.graphics_family
+    }
+
+    pub fn transfer_family(&self) -> u32 {
+        self.transfer_family
     }
 }

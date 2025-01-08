@@ -43,7 +43,9 @@ impl<'a> PhysicalDevice<'a> {
 
         let mut devices = device_handles.iter().filter_map(|handle| unsafe {
             Self::new(instance, *handle)
-                .inspect_err(|err| println!("error creating physical device: {err}"))
+                .inspect_err(|err| {
+                    println!("error creating physical device: {err}. skipping device.")
+                })
                 .ok()
         });
 

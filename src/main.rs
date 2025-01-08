@@ -41,7 +41,7 @@ fn main() {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let vk_context = Context::new().expect("Vulkan context initialization failed.");
+    let vk_context = Context::new().expect("Vulkan context initialization should succeed");
 
     let mut app = App {
         window: None,

@@ -7,9 +7,9 @@ use ash::{Entry, Instance};
 use super::device::Device;
 use super::phys_device::PhysicalDevice;
 
-pub struct Context<'a> {
+pub struct Context {
     instance: Instance,
-    device: Device<'a>,
+    device: Device,
 }
 
 unsafe extern "system" fn debug_callback(
@@ -61,7 +61,7 @@ impl Display for ContextCreateError {
     }
 }
 
-impl<'a> Context<'a> {
+impl Context {
     const REQUIRED_VALIDATION_LAYERS: &'static [&'static CStr; 1] =
         &[c"VK_LAYER_KHRONOS_validation"];
 
@@ -77,10 +77,10 @@ impl<'a> Context<'a> {
             .collect()
     }
 
-    fn get_unsupported_instance_extensions<'b>(
-        required_extensions: &'b Vec<&CStr>,
+    fn get_unsupported_instance_extensions<'a>(
+        required_extensions: &'a Vec<&CStr>,
         extension_props: &Vec<ash::vk::ExtensionProperties>,
-    ) -> Vec<&'b CStr> {
+    ) -> Vec<&'a CStr> {
         required_extensions
             .iter()
             .copied()
@@ -98,10 +98,10 @@ impl<'a> Context<'a> {
             .collect()
     }
 
-    fn get_unsupported_validation_layers<'b>(
-        required_layers: &'b [&CStr],
+    fn get_unsupported_validation_layers<'a>(
+        required_layers: &'a [&CStr],
         layer_props: &Vec<ash::vk::LayerProperties>,
-    ) -> Vec<&'b CStr> {
+    ) -> Vec<&'a CStr> {
         required_layers
             .iter()
             .copied()

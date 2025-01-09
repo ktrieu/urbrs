@@ -2,12 +2,12 @@ use std::{ffi::CStr, fmt::Display};
 
 use ash::prelude::VkResult;
 
-pub struct PhysicalDevice<'a> {
+pub struct PhysicalDevice {
     handle: ash::vk::PhysicalDevice,
-    properties: ash::vk::PhysicalDeviceProperties2<'a>,
+    properties: ash::vk::PhysicalDeviceProperties,
     features: ash::vk::PhysicalDeviceFeatures,
     extensions: Vec<ash::vk::ExtensionProperties>,
-    queue_families: Vec<ash::vk::QueueFamilyProperties2<'a>>,
+    queue_families: Vec<ash::vk::QueueFamilyProperties>,
 
     graphics_family: u32,
     transfer_family: u32,
@@ -37,7 +37,7 @@ impl Display for PhysicalDeviceCreateError {
     }
 }
 
-impl<'a> PhysicalDevice<'a> {
+impl PhysicalDevice {
     pub fn select_device(instance: &ash::Instance) -> VkResult<Option<Self>> {
         let device_handles = unsafe { instance.enumerate_physical_devices() }?;
 
@@ -52,14 +52,14 @@ impl<'a> PhysicalDevice<'a> {
         return Ok(devices.next());
     }
 
-    fn get_queue_families_with_flag<'b>(
-        families: &'b Vec<ash::vk::QueueFamilyProperties2>,
+    fn get_queue_families_with_flag<'props>(
+        families: &'props Vec<ash::vk::QueueFamilyProperties>,
         flag: ash::vk::QueueFlags,
-    ) -> impl Iterator<Item = u32> + 'b {
+    ) -> impl Iterator<Item = u32> + 'props {
         families
             .iter()
             .enumerate()
-            .filter(move |(_, f)| f.queue_family_properties.queue_flags.contains(flag))
+            .filter(move |(_, f)| f.queue_flags.contains(flag))
             .map(|(i, _)| {
                 i.try_into()
                     .expect("queue family index should fit into an u32")
@@ -79,15 +79,13 @@ impl<'a> PhysicalDevice<'a> {
             .is_some()
     }
 
-    fn select_graphics_family(
-        queue_families: &Vec<ash::vk::QueueFamilyProperties2>,
-    ) -> Option<u32> {
+    fn select_graphics_family(queue_families: &Vec<ash::vk::QueueFamilyProperties>) -> Option<u32> {
         // Just return any family with graphics support.
         Self::get_queue_families_with_flag(queue_families, ash::vk::QueueFlags::GRAPHICS).next()
     }
 
     fn select_transfer_family(
-        queue_families: &Vec<ash::vk::QueueFamilyProperties2>,
+        queue_families: &Vec<ash::vk::QueueFamilyProperties>,
         graphics_family: u32,
     ) -> u32 {
         // Try and find a family that isn't our graphics family,
@@ -110,6 +108,8 @@ impl<'a> PhysicalDevice<'a> {
     ) -> Result<Self, PhysicalDeviceCreateError> {
         let mut properties = ash::vk::PhysicalDeviceProperties2::default();
         instance.get_physical_device_properties2(handle, &mut properties);
+
+        let properties = properties.properties;
 
         let features = instance.get_physical_device_features(handle);
 
@@ -144,6 +144,11 @@ impl<'a> PhysicalDevice<'a> {
         instance
             .get_physical_device_queue_family_properties2(handle, queue_families.as_mut_slice());
 
+        let queue_families: Vec<ash::vk::QueueFamilyProperties> = queue_families
+            .iter()
+            .map(|qf| qf.queue_family_properties)
+            .collect();
+
         let graphics_family = Self::select_graphics_family(&queue_families).ok_or(
             PhysicalDeviceCreateError::UnsuitableDevice("no graphics family available".to_string()),
         )?;
@@ -167,7 +172,6 @@ impl<'a> PhysicalDevice<'a> {
 
     pub fn name(&self) -> &str {
         self.properties
-            .properties
             .device_name_as_c_str()
             .expect("device name should be valid CStr")
             .to_str()

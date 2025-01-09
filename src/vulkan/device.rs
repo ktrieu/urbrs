@@ -7,9 +7,9 @@ struct DeviceQueue {
     queue: ash::vk::Queue,
 }
 
-pub struct Device<'a> {
+pub struct Device {
     handle: ash::Device,
-    physical_device: PhysicalDevice<'a>,
+    physical_device: PhysicalDevice,
 
     graphics_queue: DeviceQueue,
     transfer_queue: DeviceQueue,
@@ -36,8 +36,8 @@ fn get_device_queue(device: &ash::Device, idx: u32) -> DeviceQueue {
     DeviceQueue { idx, queue }
 }
 
-impl<'a> Device<'a> {
-    pub fn new(instance: &ash::Instance, physical_device: PhysicalDevice<'a>) -> VkResult<Self> {
+impl Device {
+    pub fn new(instance: &ash::Instance, physical_device: PhysicalDevice) -> VkResult<Self> {
         let features = ash::vk::PhysicalDeviceFeatures::default();
 
         let mut dynamic_rendering =

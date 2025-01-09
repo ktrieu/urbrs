@@ -1,12 +1,14 @@
 use std::fmt::Display;
+use std::sync::Arc;
 
 use super::device::Device;
 use super::instance::{Instance, InstanceCreateError};
 use super::phys_device::PhysicalDevice;
 
 pub struct Context {
-    instance: Instance,
+    // Important: these need to be in this order so we cleanup the device first.
     device: Device,
+    instance: Arc<Instance>,
 }
 
 #[derive(Debug)]
@@ -44,12 +46,12 @@ impl Display for ContextCreateError {
 
 impl Context {
     pub fn new() -> Result<Self, ContextCreateError> {
-        let instance = Instance::new()?;
+        let instance = Arc::new(Instance::new()?);
 
-        let phys_device = PhysicalDevice::select_device(&instance.instance())?
+        let phys_device = PhysicalDevice::select_device(&instance.handle())?
             .ok_or(ContextCreateError::NoDevice)?;
 
-        let device = Device::new(&instance.instance(), phys_device)?;
+        let device = Device::new(instance.clone(), phys_device)?;
 
         Ok(Self { instance, device })
     }

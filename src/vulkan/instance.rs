@@ -1,8 +1,14 @@
 use std::ffi::{c_void, CStr};
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
+
+struct DebugObjs {
+    utils: ash::ext::debug_utils::Instance,
+    messenger: ash::vk::DebugUtilsMessengerEXT,
+}
 
 pub struct Instance {
     instance: ash::Instance,
+    debug_objs: Option<DebugObjs>,
 }
 
 unsafe extern "system" fn debug_callback(
@@ -181,7 +187,7 @@ impl Instance {
         // Safety: It's safe to use create_instance any time if it comes from Entry::linked.
         let instance = unsafe { entry.create_instance(&create_info, None)? };
 
-        if Self::VALIDATION_ENABLED {
+        let debug_objs = if Self::VALIDATION_ENABLED {
             let debug_msg_create_info = ash::vk::DebugUtilsMessengerCreateInfoEXT::default()
                 .message_severity(
                     ash::vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE
@@ -196,14 +202,35 @@ impl Instance {
                 )
                 .pfn_user_callback(Some(debug_callback));
 
-            let debug_utils = ash::ext::debug_utils::Instance::new(&entry, &instance);
-            unsafe { debug_utils.create_debug_utils_messenger(&debug_msg_create_info, None)? };
-        }
+            let utils = ash::ext::debug_utils::Instance::new(&entry, &instance);
+            let messenger =
+                unsafe { utils.create_debug_utils_messenger(&debug_msg_create_info, None)? };
 
-        Ok(Self { instance })
+            Some(DebugObjs { utils, messenger })
+        } else {
+            None
+        };
+
+        Ok(Self {
+            instance,
+            debug_objs,
+        })
     }
 
-    pub fn instance(&self) -> &ash::Instance {
+    pub fn handle(&self) -> &ash::Instance {
         &self.instance
+    }
+}
+
+impl Drop for Instance {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(debug_objs) = &self.debug_objs {
+                debug_objs
+                    .utils
+                    .destroy_debug_utils_messenger(debug_objs.messenger, None);
+            }
+            self.instance.destroy_instance(None);
+        }
     }
 }

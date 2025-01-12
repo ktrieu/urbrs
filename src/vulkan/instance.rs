@@ -1,6 +1,8 @@
 use std::ffi::{c_void, CStr};
 use std::fmt::{Debug, Display};
 
+use winit::raw_window_handle::RawDisplayHandle;
+
 struct DebugObjs {
     utils: ash::ext::debug_utils::Instance,
     messenger: ash::vk::DebugUtilsMessengerEXT,
@@ -69,11 +71,24 @@ impl Instance {
     const REQUIRED_INSTANCE_EXTENSIONS_BASE: &'static [&'static CStr; 1] =
         &[ash::vk::EXT_DEBUG_UTILS_NAME];
 
-    fn get_required_instance_extensions() -> Vec<&'static CStr> {
-        Self::REQUIRED_INSTANCE_EXTENSIONS_BASE
+    fn get_required_instance_extensions(
+        display_handle: RawDisplayHandle,
+    ) -> Result<Vec<&'static CStr>, InstanceCreateError> {
+        let mut base: Vec<&'static CStr> = Self::REQUIRED_INSTANCE_EXTENSIONS_BASE
             .iter()
             .copied()
-            .collect()
+            .collect();
+
+        let mut surface_exts: Vec<&'static CStr> =
+            ash_window::enumerate_required_extensions(display_handle)?
+                .iter()
+                // Safety: ash_window should always give us a pointer that's safe to use here.
+                .map(|ext| unsafe { CStr::from_ptr(*ext) })
+                .collect();
+
+        base.append(&mut surface_exts);
+
+        Ok(base)
     }
 
     fn get_unsupported_instance_extensions<'a>(
@@ -118,7 +133,7 @@ impl Instance {
             .collect()
     }
 
-    pub fn new() -> Result<Self, InstanceCreateError> {
+    pub fn new(display_handle: RawDisplayHandle) -> Result<Self, InstanceCreateError> {
         let entry = ash::Entry::linked();
 
         let app_info = ash::vk::ApplicationInfo::default()
@@ -127,7 +142,7 @@ impl Instance {
             .application_name(c"urbrs");
         let mut create_info = ash::vk::InstanceCreateInfo::default().application_info(&app_info);
 
-        let required_extensions = Self::get_required_instance_extensions();
+        let required_extensions = Self::get_required_instance_extensions(display_handle)?;
         let supported_extensions = unsafe { entry.enumerate_instance_extension_properties(None)? };
 
         let unsupported_extensions =

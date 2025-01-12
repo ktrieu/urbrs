@@ -1,6 +1,8 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
+use winit::raw_window_handle::RawDisplayHandle;
+
 use super::device::Device;
 use super::instance::{Instance, InstanceCreateError};
 use super::phys_device::PhysicalDevice;
@@ -45,8 +47,8 @@ impl Display for ContextCreateError {
 }
 
 impl Context {
-    pub fn new() -> Result<Self, ContextCreateError> {
-        let instance = Arc::new(Instance::new()?);
+    pub fn new(display_handle: RawDisplayHandle) -> Result<Self, ContextCreateError> {
+        let instance = Arc::new(Instance::new(display_handle)?);
 
         let phys_device = PhysicalDevice::select_device(&instance.handle())?
             .ok_or(ContextCreateError::NoDevice)?;

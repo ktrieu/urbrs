@@ -3,6 +3,7 @@ use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    raw_window_handle::HasDisplayHandle,
     window::{Window, WindowAttributes, WindowId},
 };
 
@@ -41,7 +42,12 @@ fn main() {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let context = Context::new().expect("context creation should succeed");
+    let display_handle = event_loop
+        .display_handle()
+        .expect("display handle should be valid")
+        .as_raw();
+
+    let context = Context::new(display_handle).expect("context creation should succeed");
 
     let mut app = App {
         window: None,

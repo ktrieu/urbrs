@@ -2,12 +2,18 @@ use std::{ffi::CStr, fmt::Display};
 
 use ash::prelude::VkResult;
 
+use super::surface::Surface;
+
 pub struct PhysicalDevice {
     handle: ash::vk::PhysicalDevice,
     properties: ash::vk::PhysicalDeviceProperties,
     features: ash::vk::PhysicalDeviceFeatures,
     extensions: Vec<ash::vk::ExtensionProperties>,
     queue_families: Vec<ash::vk::QueueFamilyProperties>,
+
+    surface_caps: ash::vk::SurfaceCapabilitiesKHR,
+    surface_formats: Vec<ash::vk::SurfaceFormatKHR>,
+    present_modes: Vec<ash::vk::PresentModeKHR>,
 
     graphics_family: u32,
     transfer_family: u32,
@@ -38,11 +44,11 @@ impl Display for PhysicalDeviceCreateError {
 }
 
 impl PhysicalDevice {
-    pub fn select_device(instance: &ash::Instance) -> VkResult<Option<Self>> {
+    pub fn select_device(instance: &ash::Instance, surface: &Surface) -> VkResult<Option<Self>> {
         let device_handles = unsafe { instance.enumerate_physical_devices() }?;
 
         let mut devices = device_handles.iter().filter_map(|handle| unsafe {
-            Self::new(instance, *handle)
+            Self::new(instance, surface, *handle)
                 .inspect_err(|err| {
                     println!("error creating physical device: {err}. skipping device.")
                 })
@@ -104,6 +110,7 @@ impl PhysicalDevice {
 
     unsafe fn new(
         instance: &ash::Instance,
+        surface: &Surface,
         handle: ash::vk::PhysicalDevice,
     ) -> Result<Self, PhysicalDeviceCreateError> {
         let mut properties = ash::vk::PhysicalDeviceProperties2::default();
@@ -155,7 +162,23 @@ impl PhysicalDevice {
 
         let transfer_family = Self::select_transfer_family(&queue_families, graphics_family);
 
-        // TODO: surface properties...
+        let surface_caps = surface
+            .surface_instance()
+            .get_physical_device_surface_capabilities(handle, *surface.handle())?;
+
+        dbg!(&surface_caps);
+
+        let surface_formats = surface
+            .surface_instance()
+            .get_physical_device_surface_formats(handle, *surface.handle())?;
+
+        dbg!(&surface_formats);
+
+        let present_modes = surface
+            .surface_instance()
+            .get_physical_device_surface_present_modes(handle, *surface.handle())?;
+
+        dbg!(&present_modes);
 
         let phys_device = Self {
             handle,
@@ -163,6 +186,9 @@ impl PhysicalDevice {
             features,
             extensions,
             queue_families,
+            surface_caps,
+            surface_formats,
+            present_modes,
             graphics_family,
             transfer_family,
         };

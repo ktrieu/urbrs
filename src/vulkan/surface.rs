@@ -30,6 +30,14 @@ impl Surface {
             handle: surface,
         })
     }
+
+    pub fn handle(&self) -> &ash::vk::SurfaceKHR {
+        &self.handle
+    }
+
+    pub fn surface_instance(&self) -> &ash::khr::surface::Instance {
+        &self.surface_instance
+    }
 }
 
 impl Drop for Surface {

@@ -59,9 +59,11 @@ impl Context {
         let phys_device = PhysicalDevice::select_device(&instance.handle())?
             .ok_or(ContextCreateError::NoDevice)?;
 
-        let device = Device::new(instance.clone(), phys_device)?;
+        // Safety: We ensure this is dropped in the right order in the Drop impl.
+        let device = unsafe { Device::new(instance.clone(), phys_device)? };
 
-        let surface = Surface::new(instance.clone(), window_handle, display_handle)?;
+        // Safety: We ensure this is dropped in the right order in the Drop impl.
+        let surface = unsafe { Surface::new(instance.clone(), window_handle, display_handle)? };
 
         Ok(Self {
             instance: ManuallyDrop::new(instance),

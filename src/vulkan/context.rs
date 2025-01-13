@@ -1,16 +1,19 @@
 use std::fmt::Display;
+use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
-use winit::raw_window_handle::RawDisplayHandle;
+use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 
 use super::device::Device;
 use super::instance::{Instance, InstanceCreateError};
 use super::phys_device::PhysicalDevice;
+use super::surface::Surface;
 
 pub struct Context {
-    // Important: these need to be in this order so we cleanup the device first.
-    device: Device,
-    instance: Arc<Instance>,
+    // These are all ManuallyDrop because we need to control drop order.
+    instance: ManuallyDrop<Arc<Instance>>,
+    device: ManuallyDrop<Device>,
+    surface: ManuallyDrop<Surface>,
 }
 
 #[derive(Debug)]
@@ -47,7 +50,10 @@ impl Display for ContextCreateError {
 }
 
 impl Context {
-    pub fn new(display_handle: RawDisplayHandle) -> Result<Self, ContextCreateError> {
+    pub fn new(
+        display_handle: RawDisplayHandle,
+        window_handle: RawWindowHandle,
+    ) -> Result<Self, ContextCreateError> {
         let instance = Arc::new(Instance::new(display_handle)?);
 
         let phys_device = PhysicalDevice::select_device(&instance.handle())?
@@ -55,6 +61,22 @@ impl Context {
 
         let device = Device::new(instance.clone(), phys_device)?;
 
-        Ok(Self { instance, device })
+        let surface = Surface::new(instance.clone(), window_handle, display_handle)?;
+
+        Ok(Self {
+            instance: ManuallyDrop::new(instance),
+            device: ManuallyDrop::new(device),
+            surface: ManuallyDrop::new(surface),
+        })
+    }
+}
+
+impl Drop for Context {
+    fn drop(&mut self) {
+        unsafe {
+            ManuallyDrop::drop(&mut self.surface);
+            ManuallyDrop::drop(&mut self.device);
+            ManuallyDrop::drop(&mut self.instance);
+        };
     }
 }

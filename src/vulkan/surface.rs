@@ -1,0 +1,41 @@
+use std::sync::Arc;
+
+use ash::prelude::VkResult;
+use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
+
+use super::instance::Instance;
+
+pub struct Surface {
+    instance: Arc<Instance>,
+    surface_instance: ash::khr::surface::Instance,
+    handle: ash::vk::SurfaceKHR,
+}
+
+impl Surface {
+    pub fn new(
+        instance: Arc<Instance>,
+        window: RawWindowHandle,
+        display: RawDisplayHandle,
+    ) -> VkResult<Self> {
+        let surface = unsafe {
+            ash_window::create_surface(instance.entry(), instance.handle(), display, window, None)?
+        };
+
+        let surface_instance =
+            ash::khr::surface::Instance::new(instance.entry(), instance.handle());
+
+        Ok(Self {
+            instance,
+            surface_instance,
+            handle: surface,
+        })
+    }
+}
+
+impl Drop for Surface {
+    fn drop(&mut self) {
+        unsafe {
+            self.surface_instance.destroy_surface(self.handle, None);
+        }
+    }
+}

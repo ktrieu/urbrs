@@ -9,6 +9,7 @@ struct DebugObjs {
 }
 
 pub struct Instance {
+    entry: ash::Entry,
     instance: ash::Instance,
     debug_objs: Option<DebugObjs>,
 }
@@ -227,6 +228,7 @@ impl Instance {
         };
 
         Ok(Self {
+            entry,
             instance,
             debug_objs,
         })
@@ -234,6 +236,10 @@ impl Instance {
 
     pub fn handle(&self) -> &ash::Instance {
         &self.instance
+    }
+
+    pub fn entry(&self) -> &ash::Entry {
+        &self.entry
     }
 }
 

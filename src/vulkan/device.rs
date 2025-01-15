@@ -42,8 +42,7 @@ fn get_device_queue(device: &ash::Device, idx: u32) -> DeviceQueue {
 }
 
 impl Device {
-    // Safety: Device must be dropped before the Instance passed in.
-    pub unsafe fn new(instance: Arc<Instance>, physical_device: PhysicalDevice) -> VkResult<Self> {
+    pub fn new(instance: Arc<Instance>, physical_device: PhysicalDevice) -> VkResult<Self> {
         let features = ash::vk::PhysicalDeviceFeatures::default();
 
         let mut dynamic_rendering =
@@ -75,10 +74,11 @@ impl Device {
             .push_next(&mut dynamic_rendering)
             .push_next(&mut sync_2);
 
-        let device =
+        let device = unsafe {
             instance
                 .handle()
-                .create_device(physical_device.handle(), &create_info, None)?;
+                .create_device(physical_device.handle(), &create_info, None)?
+        };
 
         let graphics_queue = get_device_queue(&device, graphics_family);
         let transfer_queue = get_device_queue(&device, transfer_family);

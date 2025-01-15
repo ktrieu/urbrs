@@ -12,14 +12,14 @@ pub struct Surface {
 }
 
 impl Surface {
-    // Safety: The Surface must be dropped before the Instance passed in.
-    pub unsafe fn new(
+    pub fn new(
         instance: Arc<Instance>,
         window: RawWindowHandle,
         display: RawDisplayHandle,
     ) -> VkResult<Self> {
-        let surface =
-            ash_window::create_surface(instance.entry(), instance.handle(), display, window, None)?;
+        let surface = unsafe {
+            ash_window::create_surface(instance.entry(), instance.handle(), display, window, None)?
+        };
 
         let surface_instance =
             ash::khr::surface::Instance::new(instance.entry(), instance.handle());

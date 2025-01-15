@@ -10,10 +10,9 @@ use super::phys_device::PhysicalDevice;
 use super::surface::Surface;
 
 pub struct Context {
-    // These are all ManuallyDrop because we need to control drop order.
-    instance: ManuallyDrop<Arc<Instance>>,
-    surface: ManuallyDrop<Surface>,
-    device: ManuallyDrop<Device>,
+    instance: Arc<Instance>,
+    surface: Arc<Surface>,
+    device: Arc<Device>,
 }
 
 #[derive(Debug)]
@@ -57,28 +56,24 @@ impl Context {
         let instance = Arc::new(Instance::new(display_handle)?);
 
         // Safety: We ensure this is dropped in the right order in the Drop impl.
-        let surface = unsafe { Surface::new(instance.clone(), window_handle, display_handle)? };
+        let surface = unsafe {
+            Arc::new(Surface::new(
+                instance.clone(),
+                window_handle,
+                display_handle,
+            )?)
+        };
 
         let phys_device = PhysicalDevice::select_device(&instance.handle(), &surface)?
             .ok_or(ContextCreateError::NoDevice)?;
 
         // Safety: We ensure this is dropped in the right order in the Drop impl.
-        let device = unsafe { Device::new(instance.clone(), phys_device)? };
+        let device = unsafe { Arc::new(Device::new(instance.clone(), phys_device)?) };
 
         Ok(Self {
-            instance: ManuallyDrop::new(instance),
-            surface: ManuallyDrop::new(surface),
-            device: ManuallyDrop::new(device),
+            instance,
+            surface,
+            device,
         })
-    }
-}
-
-impl Drop for Context {
-    fn drop(&mut self) {
-        unsafe {
-            ManuallyDrop::drop(&mut self.device);
-            ManuallyDrop::drop(&mut self.surface);
-            ManuallyDrop::drop(&mut self.instance);
-        };
     }
 }

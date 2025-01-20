@@ -166,19 +166,13 @@ impl PhysicalDevice {
             .surface_instance()
             .get_physical_device_surface_capabilities(handle, *surface.handle())?;
 
-        dbg!(&surface_caps);
-
         let surface_formats = surface
             .surface_instance()
             .get_physical_device_surface_formats(handle, *surface.handle())?;
 
-        dbg!(&surface_formats);
-
         let present_modes = surface
             .surface_instance()
             .get_physical_device_surface_present_modes(handle, *surface.handle())?;
-
-        dbg!(&present_modes);
 
         let phys_device = Self {
             handle,

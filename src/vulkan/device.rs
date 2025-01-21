@@ -5,9 +5,9 @@ use ash::prelude::VkResult;
 use super::instance::Instance;
 use super::phys_device::PhysicalDevice;
 
-struct DeviceQueue {
-    idx: u32,
-    queue: ash::vk::Queue,
+pub struct DeviceQueue {
+    pub idx: u32,
+    pub queue: ash::vk::Queue,
 }
 
 pub struct Device {
@@ -18,6 +18,7 @@ pub struct Device {
 
     graphics_queue: DeviceQueue,
     transfer_queue: DeviceQueue,
+    present_queue: DeviceQueue,
 }
 
 fn new_queue_create_info<'a>(
@@ -61,10 +62,15 @@ impl Device {
 
         let graphics_family = physical_device.graphics_family();
         let transfer_family = physical_device.transfer_family();
+        let present_family = physical_device.present_family();
         queue_infos.push(new_queue_create_info(graphics_family, &priorities));
 
-        if physical_device.graphics_family() != physical_device.transfer_family() {
+        if transfer_family != graphics_family {
             queue_infos.push(new_queue_create_info(transfer_family, &priorities));
+        }
+
+        if present_family != graphics_family && present_family != transfer_family {
+            queue_infos.push(new_queue_create_info(present_family, &priorities));
         }
 
         let create_info = ash::vk::DeviceCreateInfo::default()
@@ -82,6 +88,7 @@ impl Device {
 
         let graphics_queue = get_device_queue(&device, graphics_family);
         let transfer_queue = get_device_queue(&device, transfer_family);
+        let present_queue = get_device_queue(&device, present_family);
 
         Ok(Self {
             instance,
@@ -89,7 +96,28 @@ impl Device {
             physical_device,
             graphics_queue,
             transfer_queue,
+            present_queue,
         })
+    }
+
+    pub fn handle(&self) -> &ash::Device {
+        &self.handle
+    }
+
+    pub fn physical_device(&self) -> &PhysicalDevice {
+        &self.physical_device
+    }
+
+    pub fn graphics_queue(&self) -> &DeviceQueue {
+        &self.graphics_queue
+    }
+
+    pub fn transfer_queue(&self) -> &DeviceQueue {
+        &self.transfer_queue
+    }
+
+    pub fn present_queue(&self) -> &DeviceQueue {
+        &self.present_queue
     }
 }
 

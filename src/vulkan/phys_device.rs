@@ -12,11 +12,12 @@ pub struct PhysicalDevice {
     queue_families: Vec<ash::vk::QueueFamilyProperties>,
 
     surface_caps: ash::vk::SurfaceCapabilitiesKHR,
-    surface_formats: Vec<ash::vk::SurfaceFormatKHR>,
-    present_modes: Vec<ash::vk::PresentModeKHR>,
+    surface_format: ash::vk::SurfaceFormatKHR,
+    present_mode: ash::vk::PresentModeKHR,
 
     graphics_family: u32,
     transfer_family: u32,
+    present_family: u32,
 }
 
 pub enum PhysicalDeviceCreateError {
@@ -102,6 +103,60 @@ impl PhysicalDevice {
             .unwrap_or(graphics_family)
     }
 
+    fn select_present_family(
+        physical_device: ash::vk::PhysicalDevice,
+        surface: ash::vk::SurfaceKHR,
+        surface_instance: &ash::khr::surface::Instance,
+        queue_families: &Vec<ash::vk::QueueFamilyProperties>,
+        graphics_family: u32,
+    ) -> VkResult<Option<u32>> {
+        let mut present_family: Option<u32> = None;
+
+        for i in 0..queue_families.len() {
+            let i = i as u32;
+            let supported = unsafe {
+                surface_instance.get_physical_device_surface_support(physical_device, i, surface)?
+            };
+
+            if supported {
+                // We want a present queue that's the same as the graphics family.
+                if graphics_family == i {
+                    return Ok(Some(graphics_family));
+                }
+
+                // But we'll settle for any one that works.
+                present_family = Some(i);
+            }
+        }
+
+        Ok(present_family)
+    }
+
+    fn select_surface_format(
+        formats: &Vec<ash::vk::SurfaceFormatKHR>,
+    ) -> Option<ash::vk::SurfaceFormatKHR> {
+        let desired = formats.iter().find(|sf| {
+            sf.format == ash::vk::Format::B8G8R8A8_SRGB
+                && sf.color_space == ash::vk::ColorSpaceKHR::SRGB_NONLINEAR
+        });
+
+        let first = formats.get(0);
+
+        desired.or(first).copied()
+    }
+
+    fn select_present_mode(
+        modes: &Vec<ash::vk::PresentModeKHR>,
+    ) -> Option<ash::vk::PresentModeKHR> {
+        let desired = modes
+            .iter()
+            .find(|pm| **pm == ash::vk::PresentModeKHR::MAILBOX);
+
+        let first = modes.get(0);
+
+        desired.or(first).copied()
+    }
+
     pub const REQUIRED_EXTENSIONS: &'static [&'static CStr; 3] = &[
         ash::vk::KHR_SWAPCHAIN_NAME,
         ash::vk::KHR_DYNAMIC_RENDERING_NAME,
@@ -162,6 +217,17 @@ impl PhysicalDevice {
 
         let transfer_family = Self::select_transfer_family(&queue_families, graphics_family);
 
+        let present_family = Self::select_present_family(
+            handle,
+            *surface.handle(),
+            surface.surface_instance(),
+            &queue_families,
+            graphics_family,
+        )?
+        .ok_or(PhysicalDeviceCreateError::UnsuitableDevice(
+            "no present family found".to_string(),
+        ))?;
+
         let surface_caps = surface
             .surface_instance()
             .get_physical_device_surface_capabilities(handle, *surface.handle())?;
@@ -170,9 +236,19 @@ impl PhysicalDevice {
             .surface_instance()
             .get_physical_device_surface_formats(handle, *surface.handle())?;
 
+        let surface_format = Self::select_surface_format(&surface_formats).ok_or(
+            PhysicalDeviceCreateError::UnsuitableDevice("no surface format available".to_string()),
+        )?;
+
         let present_modes = surface
             .surface_instance()
             .get_physical_device_surface_present_modes(handle, *surface.handle())?;
+
+        let present_mode = Self::select_present_mode(&present_modes).ok_or(
+            PhysicalDeviceCreateError::UnsuitableDevice(
+                "no valid present mode available".to_string(),
+            ),
+        )?;
 
         let phys_device = Self {
             handle,
@@ -181,10 +257,11 @@ impl PhysicalDevice {
             extensions,
             queue_families,
             surface_caps,
-            surface_formats,
-            present_modes,
             graphics_family,
             transfer_family,
+            present_family,
+            surface_format,
+            present_mode,
         };
 
         Ok(phys_device)
@@ -208,5 +285,21 @@ impl PhysicalDevice {
 
     pub fn transfer_family(&self) -> u32 {
         self.transfer_family
+    }
+
+    pub fn present_family(&self) -> u32 {
+        self.present_family
+    }
+
+    pub fn surface_caps(&self) -> &ash::vk::SurfaceCapabilitiesKHR {
+        &self.surface_caps
+    }
+
+    pub fn surface_format(&self) -> ash::vk::SurfaceFormatKHR {
+        self.surface_format
+    }
+
+    pub fn present_mode(&self) -> ash::vk::PresentModeKHR {
+        self.present_mode
     }
 }

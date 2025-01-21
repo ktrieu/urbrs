@@ -38,7 +38,7 @@ impl ApplicationHandler for App {
             .expect("window handle should be valid")
             .as_raw();
 
-        let context = Context::new(raw_display_handle, raw_window_handle)
+        let context = Context::new(&winit_window, raw_display_handle, raw_window_handle)
             .expect("context creation should succeed");
 
         self.window = Some(Window {

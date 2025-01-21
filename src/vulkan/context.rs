@@ -8,11 +8,13 @@ use super::device::Device;
 use super::instance::{Instance, InstanceCreateError};
 use super::phys_device::PhysicalDevice;
 use super::surface::Surface;
+use super::swapchain::Swapchain;
 
 pub struct Context {
     instance: Arc<Instance>,
     surface: Arc<Surface>,
     device: Arc<Device>,
+    swapchain: Arc<Swapchain>,
 }
 
 #[derive(Debug)]
@@ -50,30 +52,35 @@ impl Display for ContextCreateError {
 
 impl Context {
     pub fn new(
+        window: &winit::window::Window,
         display_handle: RawDisplayHandle,
         window_handle: RawWindowHandle,
     ) -> Result<Self, ContextCreateError> {
         let instance = Arc::new(Instance::new(display_handle)?);
 
-        // Safety: We ensure this is dropped in the right order in the Drop impl.
-        let surface = unsafe {
-            Arc::new(Surface::new(
-                instance.clone(),
-                window_handle,
-                display_handle,
-            )?)
-        };
+        let surface = Arc::new(Surface::new(
+            instance.clone(),
+            window_handle,
+            display_handle,
+        )?);
 
         let phys_device = PhysicalDevice::select_device(&instance.handle(), &surface)?
             .ok_or(ContextCreateError::NoDevice)?;
 
-        // Safety: We ensure this is dropped in the right order in the Drop impl.
-        let device = unsafe { Arc::new(Device::new(instance.clone(), phys_device)?) };
+        let device = Arc::new(Device::new(instance.clone(), phys_device)?);
+
+        let swapchain = Arc::new(Swapchain::new(
+            instance.clone(),
+            device.clone(),
+            surface.clone(),
+            window,
+        )?);
 
         Ok(Self {
             instance,
             surface,
             device,
+            swapchain,
         })
     }
 }

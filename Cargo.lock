@@ -939,6 +939,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rsrc"
+version = "0.1.0"
+dependencies = [
+ "walkdir",
+]
+
+[[package]]
 name = "rustix"
 version = "0.38.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"

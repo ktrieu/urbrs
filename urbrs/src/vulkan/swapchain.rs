@@ -12,6 +12,7 @@ struct SwapchainImage {
 pub struct Swapchain {
     device: Arc<Device>,
     surface: Arc<Surface>,
+    surface_format: ash::vk::SurfaceFormatKHR,
     handle: ash::vk::SwapchainKHR,
     swapchain_device: ash::khr::swapchain::Device,
 
@@ -49,6 +50,10 @@ impl Swapchain {
         } else {
             desired.min(max_count)
         }
+    }
+
+    pub fn surface_color_format(&self) -> ash::vk::Format {
+        self.surface_format.format
     }
 
     unsafe fn new_image_view(
@@ -131,6 +136,7 @@ impl Swapchain {
         Ok(Self {
             device,
             surface,
+            surface_format,
             handle,
             swapchain_device,
             images,

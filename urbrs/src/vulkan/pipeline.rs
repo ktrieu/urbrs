@@ -9,6 +9,7 @@ pub struct Pipeline {
     handle: ash::vk::Pipeline,
 }
 
+#[derive(Debug)]
 pub enum PipelineBuildError {
     NoVertexShader,
     NoFragmentShader,

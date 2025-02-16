@@ -1,9 +1,6 @@
-[package]
-name = "urbrs"
-version = "0.1.0"
-edition = "2021"
+[workspace]
 
-[dependencies]
-winit = "0.30.5"
-ash = { version = "0.38.0", features = ["linked"] }
-ash-window = "0.13.0"
+resolver = "2"
+members = [
+    "urbrs",
+]

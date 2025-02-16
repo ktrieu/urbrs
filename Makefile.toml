@@ -1,0 +1,10 @@
+[tasks.process]
+workspace = false
+command = "cargo"
+args = ["run", "--bin", "rsrc", "./resource", "./data"]
+
+[tasks.start]
+workspace = false
+command = "cargo"
+args = ["run", "--bin", "urbrs"]
+dependencies = ["process"]

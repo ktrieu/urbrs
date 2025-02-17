@@ -4,9 +4,50 @@ use ash::prelude::VkResult;
 
 use super::device::Device;
 
+struct ShaderModule {
+    device: Arc<Device>,
+    handle: ash::vk::ShaderModule,
+    stage_flags: ash::vk::ShaderStageFlags,
+}
+
+impl ShaderModule {
+    fn new(
+        device: Arc<Device>,
+        data: &Vec<u32>,
+        stage_flags: ash::vk::ShaderStageFlags,
+    ) -> VkResult<Self> {
+        let create_info = ash::vk::ShaderModuleCreateInfo::default().code(data.as_slice());
+        let handle = unsafe { device.handle().create_shader_module(&create_info, None)? };
+
+        Ok(Self {
+            device,
+            handle,
+            stage_flags,
+        })
+    }
+
+    fn shader_stage_create_info(&self) -> ash::vk::PipelineShaderStageCreateInfo {
+        ash::vk::PipelineShaderStageCreateInfo::default()
+            .module(self.handle)
+            .name(c"main")
+            .stage(self.stage_flags)
+    }
+}
+
+impl Drop for ShaderModule {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .handle()
+                .destroy_shader_module(self.handle, None);
+        };
+    }
+}
+
 pub struct Pipeline {
     device: Arc<Device>,
     handle: ash::vk::Pipeline,
+    layout: ash::vk::PipelineLayout,
 }
 
 #[derive(Debug)]
@@ -92,25 +133,6 @@ impl<'s> PipelineBuilder<'s> {
         }
     }
 
-    fn create_shader_module(
-        device: Arc<Device>,
-        data: &Vec<u32>,
-    ) -> VkResult<ash::vk::ShaderModule> {
-        let info = ash::vk::ShaderModuleCreateInfo::default().code(data.as_slice());
-
-        unsafe { device.handle().create_shader_module(&info, None) }
-    }
-
-    fn create_shader_stage_info<'a>(
-        module: ash::vk::ShaderModule,
-        flags: ash::vk::ShaderStageFlags,
-    ) -> ash::vk::PipelineShaderStageCreateInfo<'a> {
-        ash::vk::PipelineShaderStageCreateInfo::default()
-            .module(module)
-            .name(c"main")
-            .stage(flags)
-    }
-
     pub fn build(self, device: Arc<Device>) -> Result<Pipeline, PipelineBuildError> {
         let vertex_shader_data = self
             .vertex_shader_data
@@ -120,16 +142,17 @@ impl<'s> PipelineBuilder<'s> {
             .fragment_shader_data
             .ok_or(PipelineBuildError::NoFragmentShader)?;
 
-        let vertex_shader_module = Self::create_shader_module(device.clone(), vertex_shader_data)?;
-        let vertex_shader_info =
-            Self::create_shader_stage_info(vertex_shader_module, ash::vk::ShaderStageFlags::VERTEX);
+        let vertex_shader = ShaderModule::new(
+            device.clone(),
+            &vertex_shader_data,
+            ash::vk::ShaderStageFlags::VERTEX,
+        )?;
 
-        let fragment_shader_module =
-            Self::create_shader_module(device.clone(), fragment_shader_data)?;
-        let fragment_shader_info = Self::create_shader_stage_info(
-            fragment_shader_module,
+        let fragment_shader = ShaderModule::new(
+            device.clone(),
+            &fragment_shader_data,
             ash::vk::ShaderStageFlags::FRAGMENT,
-        );
+        )?;
 
         // Don't initialize this - we'll leave it as dynamic state.
         let viewport_info = ash::vk::PipelineViewportStateCreateInfo::default()
@@ -193,7 +216,10 @@ impl<'s> PipelineBuilder<'s> {
 
         let layout = unsafe { device.handle().create_pipeline_layout(&layout_info, None)? };
 
+        let vertex_shader_info = vertex_shader.shader_stage_create_info();
+        let fragment_shader_info = fragment_shader.shader_stage_create_info();
         let stages = &[vertex_shader_info, fragment_shader_info];
+
         let info = ash::vk::GraphicsPipelineCreateInfo::default()
             .stages(stages)
             .viewport_state(&viewport_info)
@@ -219,6 +245,21 @@ impl<'s> PipelineBuilder<'s> {
             Err(pipelines) => Err(pipelines.1),
         }?;
 
-        return Ok(Pipeline { device, handle });
+        return Ok(Pipeline {
+            device,
+            layout,
+            handle,
+        });
+    }
+}
+
+impl Drop for Pipeline {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .handle()
+                .destroy_pipeline_layout(self.layout, None);
+            self.device.handle().destroy_pipeline(self.handle, None);
+        }
     }
 }

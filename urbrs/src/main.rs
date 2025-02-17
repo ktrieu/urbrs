@@ -1,3 +1,6 @@
+use std::io::{self, BufReader};
+
+use renderer::Renderer;
 use vulkan::context::Context;
 use winit::{
     application::ApplicationHandler,
@@ -6,11 +9,13 @@ use winit::{
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
 };
 
+mod renderer;
 mod vulkan;
 
 struct Window {
     handle: winit::window::Window,
     context: Context,
+    renderer: Renderer,
 }
 
 struct App {
@@ -41,9 +46,13 @@ impl ApplicationHandler for App {
         let context = Context::new(&winit_window, raw_display_handle, raw_window_handle)
             .expect("context creation should succeed");
 
+        let renderer = Renderer::new(context.device(), context.swapchain())
+            .expect("renderer creation should succeed");
+
         self.window = Some(Window {
             handle: winit_window,
             context,
+            renderer,
         })
     }
 

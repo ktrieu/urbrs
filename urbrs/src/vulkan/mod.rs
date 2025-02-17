@@ -5,3 +5,4 @@ pub mod phys_device;
 pub mod pipeline;
 pub mod surface;
 pub mod swapchain;
+pub mod sync;

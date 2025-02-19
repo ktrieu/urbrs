@@ -50,6 +50,23 @@ pub struct Pipeline {
     layout: ash::vk::PipelineLayout,
 }
 
+impl Pipeline {
+    pub fn handle(&self) -> ash::vk::Pipeline {
+        self.handle
+    }
+}
+
+impl Drop for Pipeline {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .handle()
+                .destroy_pipeline_layout(self.layout, None);
+            self.device.handle().destroy_pipeline(self.handle, None);
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum PipelineBuildError {
     NoVertexShader,
@@ -250,16 +267,5 @@ impl<'s> PipelineBuilder<'s> {
             layout,
             handle,
         });
-    }
-}
-
-impl Drop for Pipeline {
-    fn drop(&mut self) {
-        unsafe {
-            self.device
-                .handle()
-                .destroy_pipeline_layout(self.layout, None);
-            self.device.handle().destroy_pipeline(self.handle, None);
-        }
     }
 }

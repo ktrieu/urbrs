@@ -28,6 +28,10 @@ impl Semaphore {
             .device_index(0)
             .value(1)
     }
+
+    pub fn handle(&self) -> ash::vk::Semaphore {
+        self.handle
+    }
 }
 
 impl Drop for Semaphore {
@@ -66,6 +70,10 @@ impl Fence {
         unsafe { self.device.handle().reset_fences(&[self.handle])? };
 
         Ok(())
+    }
+
+    pub fn handle(&self) -> ash::vk::Fence {
+        self.handle
     }
 }
 

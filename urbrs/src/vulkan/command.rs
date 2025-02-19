@@ -77,4 +77,8 @@ impl CommandBuffer {
             .device_mask(0)
             .command_buffer(self.handle)
     }
+
+    pub fn handle(&self) -> ash::vk::CommandBuffer {
+        self.handle
+    }
 }

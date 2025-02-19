@@ -5,6 +5,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
 
+use ash::prelude::VkResult;
 use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 
 use super::device::Device;
@@ -94,5 +95,11 @@ impl Context {
 
     pub fn swapchain(&self) -> Arc<Swapchain> {
         self.swapchain.clone()
+    }
+
+    pub fn wait_idle(&self) -> VkResult<()> {
+        unsafe { self.device.handle().device_wait_idle() }?;
+
+        Ok(())
     }
 }

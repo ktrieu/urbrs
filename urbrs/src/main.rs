@@ -4,6 +4,7 @@ use renderer::Renderer;
 use vulkan::context::Context;
 use winit::{
     application::ApplicationHandler,
+    dpi::PhysicalSize,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     raw_window_handle::{HasDisplayHandle, HasWindowHandle},
@@ -30,7 +31,11 @@ impl ApplicationHandler for App {
         }
 
         let winit_window = event_loop
-            .create_window(winit::window::WindowAttributes::default().with_title("urbrs"))
+            .create_window(
+                winit::window::WindowAttributes::default()
+                    .with_title("urbrs")
+                    .with_inner_size(PhysicalSize::new(1920, 1080)),
+            )
             .expect("window creation should succeed");
 
         let raw_display_handle = event_loop
@@ -62,12 +67,25 @@ impl ApplicationHandler for App {
         window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
+        let window = self.window.as_ref().expect("window should be initialized");
+
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            _ => {}
+            _ => {
+                window.renderer.render().expect("rendering should succeed");
+            }
         }
+    }
+
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        self.window
+            .as_ref()
+            .expect("window should be initialized")
+            .context
+            .wait_idle()
+            .expect("wait idle should succeed");
     }
 }
 

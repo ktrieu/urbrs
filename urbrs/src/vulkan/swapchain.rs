@@ -2,11 +2,18 @@ use std::sync::Arc;
 
 use ash::prelude::VkResult;
 
-use super::{device::Device, instance::Instance, phys_device::PhysicalDevice, surface::Surface};
+use super::{
+    device::{Device, DeviceQueue},
+    instance::Instance,
+    phys_device::PhysicalDevice,
+    surface::Surface,
+    sync::Semaphore,
+};
 
-struct SwapchainImage {
-    image: ash::vk::Image,
-    view: ash::vk::ImageView,
+pub struct SwapchainImage {
+    pub image: ash::vk::Image,
+    pub view: ash::vk::ImageView,
+    pub idx: u32,
 }
 
 pub struct Swapchain {
@@ -17,6 +24,7 @@ pub struct Swapchain {
     swapchain_device: ash::khr::swapchain::Device,
 
     images: Vec<SwapchainImage>,
+    swap_area: ash::vk::Rect2D,
 }
 
 impl Swapchain {
@@ -38,6 +46,10 @@ impl Swapchain {
         }
     }
 
+    pub fn swap_area(&self) -> ash::vk::Rect2D {
+        self.swap_area
+    }
+
     fn select_image_count(physical_device: &PhysicalDevice) -> u32 {
         // Add 1 so we don't wait on the driver.
         let desired = physical_device.surface_caps().min_image_count + 1;
@@ -54,6 +66,24 @@ impl Swapchain {
 
     pub fn surface_color_format(&self) -> ash::vk::Format {
         self.surface_format.format
+    }
+
+    pub fn acquire_image(&self, completion: &Semaphore) -> VkResult<&SwapchainImage> {
+        let (idx, _) = unsafe {
+            self.swapchain_device.acquire_next_image(
+                self.handle,
+                1_000_000_000,
+                completion.handle(),
+                ash::vk::Fence::null(),
+            )?
+        };
+
+        let image = self
+            .images
+            .get(idx as usize)
+            .expect("acquired image idx should be correct");
+
+        Ok(image)
     }
 
     unsafe fn new_image_view(
@@ -84,6 +114,24 @@ impl Swapchain {
         device.create_image_view(&info, None)
     }
 
+    pub fn present(&self, idx: u32, queue: &DeviceQueue, completion: &Semaphore) -> VkResult<()> {
+        let swapchains = &[self.handle];
+        let semaphores = &[completion.handle()];
+        let indices = &[idx];
+
+        let present_info = ash::vk::PresentInfoKHR::default()
+            .swapchains(swapchains)
+            .wait_semaphores(semaphores)
+            .image_indices(indices);
+
+        unsafe {
+            self.swapchain_device
+                .queue_present(queue.queue, &present_info)
+        }?;
+
+        Ok(())
+    }
+
     pub fn new(
         instance: Arc<Instance>,
         device: Arc<Device>,
@@ -95,12 +143,14 @@ impl Swapchain {
         let surface_format = device.physical_device().surface_format();
         let image_count = Self::select_image_count(device.physical_device());
 
+        let extent = Self::select_swap_extent(device.physical_device(), window);
+
         let mut info = ash::vk::SwapchainCreateInfoKHR::default()
             .surface(*surface.handle())
             .image_format(surface_format.format)
             .image_color_space(surface_format.color_space)
             .present_mode(device.physical_device().present_mode())
-            .image_extent(Self::select_swap_extent(device.physical_device(), window))
+            .image_extent(extent)
             .min_image_count(image_count)
             .image_array_layers(1)
             .image_usage(ash::vk::ImageUsageFlags::COLOR_ATTACHMENT)
@@ -125,11 +175,14 @@ impl Swapchain {
         let vk_images = unsafe { swapchain_device.get_swapchain_images(handle)? };
         let mut images: Vec<SwapchainImage> = Vec::new();
 
-        for img in vk_images {
+        for (idx, img) in vk_images.iter().enumerate() {
             images.push(SwapchainImage {
-                image: img,
+                image: *img,
                 // Safety: image is a valid image since it came from get_swapchain_images
-                view: unsafe { Self::new_image_view(device.handle(), img, surface_format.format)? },
+                view: unsafe {
+                    Self::new_image_view(device.handle(), *img, surface_format.format)?
+                },
+                idx: idx as u32,
             });
         }
 
@@ -140,6 +193,7 @@ impl Swapchain {
             handle,
             swapchain_device,
             images,
+            swap_area: extent.into(),
         })
     }
 }

@@ -7,8 +7,6 @@ use std::{
     sync::Arc,
 };
 
-use ash::prelude::VkResult;
-
 use super::{command::CommandBuffer, device::Device};
 
 #[derive(Debug)]

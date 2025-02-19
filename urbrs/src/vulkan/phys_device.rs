@@ -6,10 +6,10 @@ use super::surface::Surface;
 
 pub struct PhysicalDevice {
     handle: ash::vk::PhysicalDevice,
-    properties: ash::vk::PhysicalDeviceProperties,
-    features: ash::vk::PhysicalDeviceFeatures,
-    extensions: Vec<ash::vk::ExtensionProperties>,
-    queue_families: Vec<ash::vk::QueueFamilyProperties>,
+    _properties: ash::vk::PhysicalDeviceProperties,
+    _features: ash::vk::PhysicalDeviceFeatures,
+    _extensions: Vec<ash::vk::ExtensionProperties>,
+    _queue_families: Vec<ash::vk::QueueFamilyProperties>,
 
     surface_caps: ash::vk::SurfaceCapabilitiesKHR,
     surface_format: ash::vk::SurfaceFormatKHR,
@@ -252,10 +252,10 @@ impl PhysicalDevice {
 
         let phys_device = Self {
             handle,
-            properties,
-            features,
-            extensions,
-            queue_families,
+            _properties: properties,
+            _features: features,
+            _extensions: extensions,
+            _queue_families: queue_families,
             surface_caps,
             graphics_family,
             transfer_family,
@@ -265,14 +265,6 @@ impl PhysicalDevice {
         };
 
         Ok(phys_device)
-    }
-
-    pub fn name(&self) -> &str {
-        self.properties
-            .device_name_as_c_str()
-            .expect("device name should be valid CStr")
-            .to_str()
-            .expect("device name should be valid UTF-8")
     }
 
     pub fn handle(&self) -> ash::vk::PhysicalDevice {

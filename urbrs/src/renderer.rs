@@ -15,7 +15,7 @@ pub struct Renderer {
     device: Arc<Device>,
     swapchain: Arc<Swapchain>,
 
-    command_pool: CommandPool,
+    _command_pool: CommandPool,
     command_buffer: CommandBuffer,
 
     start: Instant,
@@ -93,7 +93,7 @@ impl Renderer {
         Ok(Self {
             device,
             swapchain,
-            command_pool,
+            _command_pool: command_pool,
             command_buffer,
             start: Instant::now(),
             render_fence,

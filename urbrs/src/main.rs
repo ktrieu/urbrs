@@ -1,5 +1,3 @@
-use std::io::{self, BufReader};
-
 use renderer::Renderer;
 use vulkan::context::Context;
 use winit::{
@@ -64,11 +62,9 @@ impl ApplicationHandler for App {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        window_id: winit::window::WindowId,
+        _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let window = self.window.as_ref().expect("window should be initialized");
-
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -77,7 +73,7 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         let window = self.window.as_ref().unwrap();
 
         window.renderer.render().unwrap();

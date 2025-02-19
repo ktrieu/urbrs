@@ -18,7 +18,7 @@ pub struct SwapchainImage {
 
 pub struct Swapchain {
     device: Arc<Device>,
-    surface: Arc<Surface>,
+    _surface: Arc<Surface>,
     surface_format: ash::vk::SurfaceFormatKHR,
     handle: ash::vk::SwapchainKHR,
     swapchain_device: ash::khr::swapchain::Device,
@@ -188,7 +188,7 @@ impl Swapchain {
 
         Ok(Self {
             device,
-            surface,
+            _surface: surface,
             surface_format,
             handle,
             swapchain_device,

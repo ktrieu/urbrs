@@ -6,7 +6,7 @@ use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use super::instance::Instance;
 
 pub struct Surface {
-    instance: Arc<Instance>,
+    _instance: Arc<Instance>,
     surface_instance: ash::khr::surface::Instance,
     handle: ash::vk::SurfaceKHR,
 }
@@ -25,7 +25,7 @@ impl Surface {
             ash::khr::surface::Instance::new(instance.entry(), instance.handle());
 
         Ok(Self {
-            instance,
+            _instance: instance,
             surface_instance,
             handle: surface,
         })

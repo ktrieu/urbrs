@@ -11,13 +11,13 @@ pub struct DeviceQueue {
 }
 
 pub struct Device {
-    instance: Arc<Instance>,
+    _instance: Arc<Instance>,
 
     handle: ash::Device,
     physical_device: PhysicalDevice,
 
     graphics_queue: DeviceQueue,
-    transfer_queue: DeviceQueue,
+    _transfer_queue: DeviceQueue,
     present_queue: DeviceQueue,
 }
 
@@ -91,11 +91,11 @@ impl Device {
         let present_queue = get_device_queue(&device, present_family);
 
         Ok(Self {
-            instance,
+            _instance: instance,
             handle: device,
             physical_device,
             graphics_queue,
-            transfer_queue,
+            _transfer_queue: transfer_queue,
             present_queue,
         })
     }
@@ -112,8 +112,8 @@ impl Device {
         &self.graphics_queue
     }
 
-    pub fn transfer_queue(&self) -> &DeviceQueue {
-        &self.transfer_queue
+    pub fn _transfer_queue(&self) -> &DeviceQueue {
+        &self._transfer_queue
     }
 
     pub fn present_queue(&self) -> &DeviceQueue {

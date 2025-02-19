@@ -1,9 +1,5 @@
 use std::fmt::Display;
-use std::io::{BufReader, Read, Seek};
-use std::ops::{Div, Rem};
-use std::path::Path;
 use std::sync::Arc;
-use std::{fs, io};
 
 use ash::prelude::VkResult;
 use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
@@ -11,13 +7,12 @@ use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use super::device::Device;
 use super::instance::{Instance, InstanceCreateError};
 use super::phys_device::PhysicalDevice;
-use super::pipeline::PipelineBuilder;
 use super::surface::Surface;
 use super::swapchain::Swapchain;
 
 pub struct Context {
-    instance: Arc<Instance>,
-    surface: Arc<Surface>,
+    _instance: Arc<Instance>,
+    _surface: Arc<Surface>,
     device: Arc<Device>,
     swapchain: Arc<Swapchain>,
 }
@@ -82,8 +77,8 @@ impl Context {
         )?);
 
         Ok(Self {
-            instance,
-            surface,
+            _instance: instance,
+            _surface: surface,
             device,
             swapchain,
         })

@@ -169,7 +169,7 @@ impl Instance {
 
         let available_validation_layers = unsafe { entry.enumerate_instance_layer_properties()? };
 
-        let mut enabled_layers: Vec<*const i8> = Vec::new();
+        let enabled_layers: Vec<*const i8>;
 
         if Self::VALIDATION_ENABLED {
             let unsupported_layers = Self::get_unsupported_validation_layers(

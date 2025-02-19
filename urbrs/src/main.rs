@@ -73,10 +73,15 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            _ => {
-                window.renderer.render().expect("rendering should succeed");
-            }
+            _ => {}
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let window = self.window.as_ref().unwrap();
+
+        window.renderer.render().unwrap();
+        window.handle.request_redraw();
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {

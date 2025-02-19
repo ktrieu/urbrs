@@ -1,4 +1,4 @@
-use std::{fmt::Display, path::Path, sync::Arc};
+use std::{fmt::Display, path::Path, sync::Arc, time::Instant};
 
 use ash::prelude::VkResult;
 
@@ -17,6 +17,8 @@ pub struct Renderer {
 
     command_pool: CommandPool,
     command_buffer: CommandBuffer,
+
+    start: Instant,
 
     render_fence: Fence,
     swap_acquired: Semaphore,
@@ -93,6 +95,7 @@ impl Renderer {
             swapchain,
             command_pool,
             command_buffer,
+            start: Instant::now(),
             render_fence,
             swap_acquired,
             render_complete,
@@ -113,7 +116,10 @@ impl Renderer {
         util::swap_acquire_transition(self.device.clone(), &self.command_buffer, swap_image.image);
 
         let mut clear_value = ash::vk::ClearValue::default();
-        clear_value.color.float32 = [1.0f32, 0.0f32, 1.0f32, 1.0f32];
+
+        let elapsed = self.start.elapsed().as_secs_f32().fract();
+
+        clear_value.color.float32 = [1.0f32, elapsed, 1.0f32, 1.0f32];
 
         let color_attachment_info = ash::vk::RenderingAttachmentInfo::default()
             .image_view(swap_image.view)

@@ -1,21 +1,13 @@
-use renderer::Renderer;
-use vulkan::context::Context;
+use window::Window;
 use winit::{
     application::ApplicationHandler,
-    dpi::PhysicalSize,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
 };
 
 mod renderer;
 mod vulkan;
-
-struct Window {
-    handle: winit::window::Window,
-    context: Context,
-    renderer: Renderer,
-}
+mod window;
 
 struct App {
     window: Option<Window>,
@@ -28,35 +20,7 @@ impl ApplicationHandler for App {
             return;
         }
 
-        let winit_window = event_loop
-            .create_window(
-                winit::window::WindowAttributes::default()
-                    .with_title("urbrs")
-                    .with_inner_size(PhysicalSize::new(1920, 1080)),
-            )
-            .expect("window creation should succeed");
-
-        let raw_display_handle = event_loop
-            .display_handle()
-            .expect("display handle should be valid")
-            .as_raw();
-
-        let raw_window_handle = winit_window
-            .window_handle()
-            .expect("window handle should be valid")
-            .as_raw();
-
-        let context = Context::new(&winit_window, raw_display_handle, raw_window_handle)
-            .expect("context creation should succeed");
-
-        let renderer = Renderer::new(context.device(), context.swapchain())
-            .expect("renderer creation should succeed");
-
-        self.window = Some(Window {
-            handle: winit_window,
-            context,
-            renderer,
-        })
+        self.window = Some(Window::new(event_loop))
     }
 
     fn window_event(
@@ -74,19 +38,11 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        let window = self.window.as_ref().unwrap();
-
-        window.renderer.render().unwrap();
-        window.handle.request_redraw();
+        self.window.as_ref().unwrap().render();
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        self.window
-            .as_ref()
-            .expect("window should be initialized")
-            .context
-            .wait_idle()
-            .expect("wait idle should succeed");
+        self.window.as_ref().unwrap().exit();
     }
 }
 

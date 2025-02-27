@@ -2,6 +2,7 @@ use std::mem::offset_of;
 
 // Make this customizable or something later.
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct Vertex {
     pub position: glam::Vec3,
     pub color: glam::Vec3,
@@ -40,4 +41,10 @@ pub struct Mesh {
     vertices: Vec<Vertex>,
 }
 
-impl Mesh {}
+impl Mesh {
+    pub fn new_from_raw_data(vertices: &[Vertex]) -> Self {
+        Self {
+            vertices: Vec::from(vertices)
+        }
+    }
+}

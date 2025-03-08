@@ -1,6 +1,6 @@
-use std::{fmt::Display, path::Path, sync::Arc, time::Instant};
+use std::{path::Path, sync::Arc, time::Instant};
 
-use ash::prelude::VkResult;
+use anyhow::Context as anyhow_context;
 
 use crate::vulkan::{
     buffer::Buffer,
@@ -8,10 +8,10 @@ use crate::vulkan::{
     context::Context,
     device::Device,
     mesh::Vertex,
-    pipeline::{Pipeline, PipelineBuildError, PipelineBuilder},
+    pipeline::{Pipeline, PipelineBuilder},
     swapchain::Swapchain,
     sync::{Fence, Semaphore},
-    util::{self, SpirvReadError},
+    util::{self},
 };
 
 pub struct Renderer {
@@ -33,41 +33,6 @@ pub struct Renderer {
     vertex_buffer: Buffer,
 }
 
-#[derive(Debug)]
-pub enum RendererCreateError {
-    PipelineError(PipelineBuildError),
-    VkError(ash::vk::Result),
-    SpirvError(SpirvReadError),
-}
-
-impl From<PipelineBuildError> for RendererCreateError {
-    fn from(value: PipelineBuildError) -> Self {
-        RendererCreateError::PipelineError(value)
-    }
-}
-
-impl From<ash::vk::Result> for RendererCreateError {
-    fn from(value: ash::vk::Result) -> Self {
-        RendererCreateError::VkError(value)
-    }
-}
-
-impl From<SpirvReadError> for RendererCreateError {
-    fn from(value: SpirvReadError) -> Self {
-        RendererCreateError::SpirvError(value)
-    }
-}
-
-impl Display for RendererCreateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RendererCreateError::PipelineError(err) => write!(f, "pipeline build error: {}", err),
-            RendererCreateError::VkError(err) => write!(f, "vulkan error: {}", err),
-            RendererCreateError::SpirvError(err) => write!(f, "SPIR-V read error: {}", err),
-        }
-    }
-}
-
 const VERTEX_DATA: [Vertex; 3] = [
     Vertex {
         position: glam::vec3(1.0, 1.0, 0.0),
@@ -84,10 +49,7 @@ const VERTEX_DATA: [Vertex; 3] = [
 ];
 
 impl Renderer {
-    pub fn new(
-        context: Arc<Context>,
-        swapchain: Arc<Swapchain>,
-    ) -> Result<Self, RendererCreateError> {
+    pub fn new(context: Arc<Context>, swapchain: Arc<Swapchain>) -> anyhow::Result<Self> {
         let device = context.device();
 
         let command_pool = CommandPool::new(
@@ -103,8 +65,10 @@ impl Renderer {
         let render_complete =
             Semaphore::new(device.clone(), ash::vk::SemaphoreCreateFlags::empty())?;
 
-        let vertex_shader_data = util::read_spirv(Path::new("./data/shader/a.spv.vert"))?;
-        let fragment_shader_data = util::read_spirv(Path::new("./data/shader/a.spv.frag"))?;
+        let vertex_shader_data = util::read_spirv(Path::new("./data/shader/a.spv.vert"))
+            .with_context(|| "failed to read vertex shader a.spv.vert")?;
+        let fragment_shader_data = util::read_spirv(Path::new("./data/shader/a.spv.frag"))
+            .with_context(|| "failed to read vertex shader a.spv.frag")?;
 
         let graphics_pipeline = PipelineBuilder::new()
             .with_color_format(swapchain.surface_color_format())
@@ -139,7 +103,7 @@ impl Renderer {
         })
     }
 
-    pub fn render(&self) -> VkResult<()> {
+    pub fn render(&self) -> anyhow::Result<()> {
         // Wait one sec for the fence to be available.
         self.render_fence.wait(1_000_000_000)?;
         self.render_fence.reset()?;

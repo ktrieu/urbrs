@@ -1,5 +1,4 @@
 use std::{
-    fmt::Display,
     fs,
     io::{self, BufReader, Read, Seek},
     ops::{Div, Rem},
@@ -9,28 +8,7 @@ use std::{
 
 use super::{command::CommandBuffer, device::Device};
 
-#[derive(Debug)]
-pub enum SpirvReadError {
-    IoError(io::Error),
-    InvalidSpirvFile,
-}
-
-impl From<io::Error> for SpirvReadError {
-    fn from(value: io::Error) -> Self {
-        SpirvReadError::IoError(value)
-    }
-}
-
-impl Display for SpirvReadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SpirvReadError::IoError(error) => write!(f, "io error: {error}"),
-            SpirvReadError::InvalidSpirvFile => write!(f, "invalid SPIR-V file"),
-        }
-    }
-}
-
-pub fn read_spirv(path: &Path) -> Result<Vec<u32>, SpirvReadError> {
+pub fn read_spirv(path: &Path) -> anyhow::Result<Vec<u32>> {
     let mut file = fs::File::open(path)?;
 
     // Get the size of file - need two seek ops for this.
@@ -42,7 +20,7 @@ pub fn read_spirv(path: &Path) -> Result<Vec<u32>, SpirvReadError> {
     // We expect a file of 4 byte words for SPIR-V.
     let remainder = size.rem(4);
     if remainder != 0 {
-        return Err(SpirvReadError::InvalidSpirvFile);
+        return Err(anyhow::anyhow!("SPIR-V file size was not a multiple of 4"));
     }
 
     let mut reader = BufReader::new(file);

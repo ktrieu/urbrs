@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use ash::prelude::VkResult;
-
 use super::instance::Instance;
 use super::phys_device::PhysicalDevice;
 
@@ -43,7 +41,7 @@ fn get_device_queue(device: &ash::Device, idx: u32) -> DeviceQueue {
 }
 
 impl Device {
-    pub fn new(instance: Arc<Instance>, physical_device: PhysicalDevice) -> VkResult<Self> {
+    pub fn new(instance: Arc<Instance>, physical_device: PhysicalDevice) -> anyhow::Result<Self> {
         let features = ash::vk::PhysicalDeviceFeatures::default();
 
         let mut dynamic_rendering =

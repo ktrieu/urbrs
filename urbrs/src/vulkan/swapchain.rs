@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use ash::prelude::VkResult;
-
 use super::{
     device::{Device, DeviceQueue},
     instance::Instance,
@@ -68,7 +66,7 @@ impl Swapchain {
         self.surface_format.format
     }
 
-    pub fn acquire_image(&self, completion: &Semaphore) -> VkResult<&SwapchainImage> {
+    pub fn acquire_image(&self, completion: &Semaphore) -> anyhow::Result<&SwapchainImage> {
         let (idx, _) = unsafe {
             self.swapchain_device.acquire_next_image(
                 self.handle,
@@ -90,7 +88,7 @@ impl Swapchain {
         device: &ash::Device,
         image: ash::vk::Image,
         format: ash::vk::Format,
-    ) -> VkResult<ash::vk::ImageView> {
+    ) -> anyhow::Result<ash::vk::ImageView> {
         let mapping = ash::vk::ComponentMapping::default()
             .r(ash::vk::ComponentSwizzle::IDENTITY)
             .g(ash::vk::ComponentSwizzle::IDENTITY)
@@ -111,10 +109,15 @@ impl Swapchain {
             .components(mapping)
             .subresource_range(range);
 
-        device.create_image_view(&info, None)
+        Ok(device.create_image_view(&info, None)?)
     }
 
-    pub fn present(&self, idx: u32, queue: &DeviceQueue, completion: &Semaphore) -> VkResult<()> {
+    pub fn present(
+        &self,
+        idx: u32,
+        queue: &DeviceQueue,
+        completion: &Semaphore,
+    ) -> anyhow::Result<()> {
         let swapchains = &[self.handle];
         let semaphores = &[completion.handle()];
         let indices = &[idx];
@@ -137,7 +140,7 @@ impl Swapchain {
         device: Arc<Device>,
         surface: Arc<Surface>,
         window: &winit::window::Window,
-    ) -> VkResult<Self> {
+    ) -> anyhow::Result<Self> {
         let swapchain_device = ash::khr::swapchain::Device::new(instance.handle(), device.handle());
 
         let surface_format = device.physical_device().surface_format();

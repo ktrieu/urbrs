@@ -40,15 +40,3 @@ impl Vertex {
         size_of::<Self>()
     }
 }
-
-pub struct Mesh {
-    vertices: Vec<Vertex>,
-}
-
-impl Mesh {
-    pub fn new_from_raw_data(vertices: &[Vertex]) -> Self {
-        Self {
-            vertices: Vec::from(vertices),
-        }
-    }
-}

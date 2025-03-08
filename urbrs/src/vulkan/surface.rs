@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use ash::prelude::VkResult;
 use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 
 use super::instance::Instance;
@@ -16,7 +15,7 @@ impl Surface {
         instance: Arc<Instance>,
         window: RawWindowHandle,
         display: RawDisplayHandle,
-    ) -> VkResult<Self> {
+    ) -> anyhow::Result<Self> {
         let surface = unsafe {
             ash_window::create_surface(instance.entry(), instance.handle(), display, window, None)?
         };

@@ -1,5 +1,4 @@
 use std::ffi::{c_void, CStr};
-use std::fmt::{Debug, Display};
 
 use winit::raw_window_handle::RawDisplayHandle;
 
@@ -34,35 +33,6 @@ unsafe extern "system" fn debug_callback(
     return ash::vk::FALSE;
 }
 
-#[derive(Debug)]
-pub enum InstanceCreateError {
-    VkError(ash::vk::Result),
-    UnsupportedValidationLayers(Vec<String>),
-    UnsupportedExtensions(Vec<String>),
-}
-
-impl From<ash::vk::Result> for InstanceCreateError {
-    fn from(value: ash::vk::Result) -> Self {
-        Self::VkError(value)
-    }
-}
-
-impl Display for InstanceCreateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            InstanceCreateError::VkError(vk_err) => writeln!(f, "vulkan error: {vk_err}"),
-            InstanceCreateError::UnsupportedValidationLayers(layers) => {
-                let layers = layers.join(", ");
-                writeln!(f, "unsupported validation layers: {layers}")
-            }
-            InstanceCreateError::UnsupportedExtensions(exts) => {
-                let exts = exts.join(", ");
-                writeln!(f, "unsupported instance extensions: {exts}")
-            }
-        }
-    }
-}
-
 impl Instance {
     const REQUIRED_VALIDATION_LAYERS: &'static [&'static CStr; 1] =
         &[c"VK_LAYER_KHRONOS_validation"];
@@ -74,7 +44,7 @@ impl Instance {
 
     fn get_required_instance_extensions(
         display_handle: RawDisplayHandle,
-    ) -> Result<Vec<&'static CStr>, InstanceCreateError> {
+    ) -> anyhow::Result<Vec<&'static CStr>> {
         let mut base: Vec<&'static CStr> = Self::REQUIRED_INSTANCE_EXTENSIONS_BASE
             .iter()
             .copied()
@@ -134,7 +104,7 @@ impl Instance {
             .collect()
     }
 
-    pub fn new(display_handle: RawDisplayHandle) -> Result<Self, InstanceCreateError> {
+    pub fn new(display_handle: RawDisplayHandle) -> anyhow::Result<Self> {
         let entry = ash::Entry::linked();
 
         let app_info = ash::vk::ApplicationInfo::default()
@@ -150,7 +120,7 @@ impl Instance {
             Self::get_unsupported_instance_extensions(&required_extensions, &supported_extensions);
 
         if unsupported_extensions.len() > 0 {
-            let unsupported_extensions = unsupported_extensions
+            let unsupported_extensions: Vec<String> = unsupported_extensions
                 .iter()
                 .map(|e| {
                     e.to_str()
@@ -158,8 +128,9 @@ impl Instance {
                         .to_string()
                 })
                 .collect();
-            return Err(InstanceCreateError::UnsupportedExtensions(
-                unsupported_extensions,
+            return Err(anyhow::anyhow!(
+                "the following required extensions were unsupported: {:?}",
+                unsupported_extensions
             ));
         }
 
@@ -178,7 +149,7 @@ impl Instance {
             );
 
             if unsupported_layers.len() > 0 {
-                let unsupported_layers = unsupported_layers
+                let unsupported_layers: Vec<String> = unsupported_layers
                     .iter()
                     .map(|e| {
                         e.to_str()
@@ -187,8 +158,9 @@ impl Instance {
                     })
                     .collect();
 
-                return Err(InstanceCreateError::UnsupportedValidationLayers(
-                    unsupported_layers,
+                return Err(anyhow::anyhow!(
+                    "the following validation layers were unsupported: {:?}",
+                    unsupported_layers
                 ));
             }
 

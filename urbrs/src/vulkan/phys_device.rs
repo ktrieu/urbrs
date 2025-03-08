@@ -1,6 +1,4 @@
-use std::{ffi::CStr, fmt::Display};
-
-use ash::prelude::VkResult;
+use std::ffi::CStr;
 
 use super::surface::Surface;
 
@@ -20,32 +18,11 @@ pub struct PhysicalDevice {
     present_family: u32,
 }
 
-pub enum PhysicalDeviceCreateError {
-    VkError(ash::vk::Result),
-    UnsuitableDevice(String),
-}
-
-impl From<ash::vk::Result> for PhysicalDeviceCreateError {
-    fn from(value: ash::vk::Result) -> Self {
-        PhysicalDeviceCreateError::VkError(value)
-    }
-}
-
-impl Display for PhysicalDeviceCreateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PhysicalDeviceCreateError::VkError(vk_result) => {
-                writeln!(f, "vulkan error: {vk_result}")
-            }
-            PhysicalDeviceCreateError::UnsuitableDevice(reason) => {
-                writeln!(f, "device not suitable: {reason}")
-            }
-        }
-    }
-}
-
 impl PhysicalDevice {
-    pub fn select_device(instance: &ash::Instance, surface: &Surface) -> VkResult<Option<Self>> {
+    pub fn select_device(
+        instance: &ash::Instance,
+        surface: &Surface,
+    ) -> anyhow::Result<Option<Self>> {
         let device_handles = unsafe { instance.enumerate_physical_devices() }?;
 
         let mut devices = device_handles.iter().filter_map(|handle| unsafe {
@@ -109,7 +86,7 @@ impl PhysicalDevice {
         surface_instance: &ash::khr::surface::Instance,
         queue_families: &Vec<ash::vk::QueueFamilyProperties>,
         graphics_family: u32,
-    ) -> VkResult<Option<u32>> {
+    ) -> anyhow::Result<Option<u32>> {
         let mut present_family: Option<u32> = None;
 
         for i in 0..queue_families.len() {
@@ -167,7 +144,7 @@ impl PhysicalDevice {
         instance: &ash::Instance,
         surface: &Surface,
         handle: ash::vk::PhysicalDevice,
-    ) -> Result<Self, PhysicalDeviceCreateError> {
+    ) -> anyhow::Result<Self> {
         let mut properties = ash::vk::PhysicalDeviceProperties2::default();
         instance.get_physical_device_properties2(handle, &mut properties);
 
@@ -184,18 +161,10 @@ impl PhysicalDevice {
             .collect();
 
         if unsupported_extensions.len() > 0 {
-            let unsupported_extension_str = unsupported_extensions
-                .iter()
-                .map(|unsupported| {
-                    unsupported
-                        .to_str()
-                        .expect("extension names should be valid str")
-                })
-                .collect::<Vec<&str>>()
-                .join(", ");
-            return Err(PhysicalDeviceCreateError::UnsuitableDevice(format!(
-                "physical device extensions not supported: {unsupported_extension_str}"
-            )));
+            return Err(anyhow::anyhow!(
+                "physical device extensions not supported: {:?}",
+                unsupported_extensions
+            ));
         }
 
         let queue_families_len = instance.get_physical_device_queue_family_properties2_len(handle);
@@ -211,9 +180,8 @@ impl PhysicalDevice {
             .map(|qf| qf.queue_family_properties)
             .collect();
 
-        let graphics_family = Self::select_graphics_family(&queue_families).ok_or(
-            PhysicalDeviceCreateError::UnsuitableDevice("no graphics family available".to_string()),
-        )?;
+        let graphics_family = Self::select_graphics_family(&queue_families)
+            .ok_or(anyhow::anyhow!("no graphics family available"))?;
 
         let transfer_family = Self::select_transfer_family(&queue_families, graphics_family);
 
@@ -224,9 +192,7 @@ impl PhysicalDevice {
             &queue_families,
             graphics_family,
         )?
-        .ok_or(PhysicalDeviceCreateError::UnsuitableDevice(
-            "no present family found".to_string(),
-        ))?;
+        .ok_or(anyhow::anyhow!("no present family found"))?;
 
         let surface_caps = surface
             .surface_instance()
@@ -236,19 +202,15 @@ impl PhysicalDevice {
             .surface_instance()
             .get_physical_device_surface_formats(handle, *surface.handle())?;
 
-        let surface_format = Self::select_surface_format(&surface_formats).ok_or(
-            PhysicalDeviceCreateError::UnsuitableDevice("no surface format available".to_string()),
-        )?;
+        let surface_format = Self::select_surface_format(&surface_formats)
+            .ok_or(anyhow::anyhow!("no surface format available"))?;
 
         let present_modes = surface
             .surface_instance()
             .get_physical_device_surface_present_modes(handle, *surface.handle())?;
 
-        let present_mode = Self::select_present_mode(&present_modes).ok_or(
-            PhysicalDeviceCreateError::UnsuitableDevice(
-                "no valid present mode available".to_string(),
-            ),
-        )?;
+        let present_mode = Self::select_present_mode(&present_modes)
+            .ok_or(anyhow::anyhow!("no valid present mode available"))?;
 
         let phys_device = Self {
             handle,

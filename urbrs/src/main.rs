@@ -20,7 +20,7 @@ impl ApplicationHandler for App {
             return;
         }
 
-        self.window = Some(Window::new(event_loop))
+        self.window = Some(Window::new(event_loop).expect("window creation should succeed"))
     }
 
     fn window_event(
@@ -38,16 +38,20 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        self.window.as_ref().unwrap().render();
+        if let Err(err) = self.window.as_ref().unwrap().render() {
+            eprintln!("rendering failed: {err:?}");
+        }
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        self.window.as_ref().unwrap().exit();
+        if let Err(err) = self.window.as_ref().unwrap().exit() {
+            eprintln!("exit failed: {err:?}")
+        }
     }
 }
 
 fn main() {
-    let event_loop = EventLoop::new().unwrap();
+    let event_loop = EventLoop::new().expect("event loop creation should succeed");
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = App { window: None };

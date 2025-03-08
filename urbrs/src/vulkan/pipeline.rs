@@ -1,6 +1,4 @@
-use std::{fmt::Display, sync::Arc};
-
-use ash::prelude::VkResult;
+use std::sync::Arc;
 
 use super::{device::Device, mesh::VertexLayoutInfo};
 
@@ -15,7 +13,7 @@ impl ShaderModule {
         device: Arc<Device>,
         data: &Vec<u32>,
         stage_flags: ash::vk::ShaderStageFlags,
-    ) -> VkResult<Self> {
+    ) -> anyhow::Result<Self> {
         let create_info = ash::vk::ShaderModuleCreateInfo::default().code(data.as_slice());
         let handle = unsafe { device.handle().create_shader_module(&create_info, None)? };
 
@@ -64,43 +62,6 @@ impl Drop for Pipeline {
                 .destroy_pipeline_layout(self.layout, None);
             self.device.handle().destroy_pipeline(self.handle, None);
         }
-    }
-}
-
-#[derive(Debug)]
-pub enum PipelineBuildError {
-    NoVertexShader,
-    NoFragmentShader,
-    NoColorFormat,
-    NoDepthFormat,
-    VulkanError(ash::vk::Result),
-}
-
-impl Display for PipelineBuildError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PipelineBuildError::NoVertexShader => {
-                write!(f, "no vertex shader specified for the pipeline")
-            }
-            PipelineBuildError::NoFragmentShader => {
-                write!(f, "no fragment shader specified for the pipeline")
-            }
-            PipelineBuildError::NoColorFormat => {
-                write!(f, "no color format specified for the pipeline")
-            }
-            PipelineBuildError::NoDepthFormat => {
-                write!(f, "no depth format specified for the pipeline")
-            }
-            PipelineBuildError::VulkanError(vk_err) => {
-                write!(f, "vulkan error {vk_err}")
-            }
-        }
-    }
-}
-
-impl From<ash::vk::Result> for PipelineBuildError {
-    fn from(value: ash::vk::Result) -> Self {
-        PipelineBuildError::VulkanError(value)
     }
 }
 
@@ -160,14 +121,14 @@ impl<'s> PipelineBuilder<'s> {
         }
     }
 
-    pub fn build(self, device: Arc<Device>) -> Result<Pipeline, PipelineBuildError> {
+    pub fn build(self, device: Arc<Device>) -> anyhow::Result<Pipeline> {
         let vertex_shader_data = self
             .vertex_shader_data
-            .ok_or(PipelineBuildError::NoVertexShader)?;
+            .ok_or(anyhow::anyhow!("no vertex shader specified"))?;
 
         let fragment_shader_data = self
             .fragment_shader_data
-            .ok_or(PipelineBuildError::NoFragmentShader)?;
+            .ok_or(anyhow::anyhow!("no fragment shader specified"))?;
 
         let vertex_shader = ShaderModule::new(
             device.clone(),
@@ -232,8 +193,12 @@ impl<'s> PipelineBuilder<'s> {
             .min_depth_bounds(0.0f32)
             .max_depth_bounds(1.0f32);
 
-        let color_format = self.color_format.ok_or(PipelineBuildError::NoColorFormat)?;
-        let depth_format = self.depth_format.ok_or(PipelineBuildError::NoDepthFormat)?;
+        let color_format = self
+            .color_format
+            .ok_or(anyhow::anyhow!("no color format specified!"))?;
+        let depth_format = self
+            .depth_format
+            .ok_or(anyhow::anyhow!("no depth format specified"))?;
 
         let color_formats = &[color_format];
         let mut rendering_info = ash::vk::PipelineRenderingCreateInfo::default()

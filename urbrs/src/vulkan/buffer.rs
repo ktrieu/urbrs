@@ -1,8 +1,6 @@
-use std::{alloc::alloc, ffi::c_void, ptr::NonNull, sync::Arc};
+use std::{ffi::c_void, ptr::NonNull, sync::Arc};
 
-use ash::prelude::VkResult;
-
-use super::{context::Context, device::Device, mesh::Vertex};
+use super::{context::Context, mesh::Vertex};
 
 pub struct Buffer {
     context: Arc<Context>,
@@ -12,27 +10,13 @@ pub struct Buffer {
     allocation: Option<gpu_allocator::vulkan::Allocation>,
 }
 
-#[derive(Debug)]
-pub enum BufferUploadError {
-    IncorrectSize,
-    VkError(ash::vk::Result),
-}
-
-impl From<ash::vk::Result> for BufferUploadError {
-    fn from(value: ash::vk::Result) -> Self {
-        BufferUploadError::VkError(value)
-    }
-}
-
-pub struct BufferUpload {}
-
 impl Buffer {
     pub fn new(
         context: Arc<Context>,
         size: usize,
         usage: ash::vk::BufferUsageFlags,
         sharing_mode: ash::vk::SharingMode,
-    ) -> VkResult<Self> {
+    ) -> anyhow::Result<Self> {
         let info = ash::vk::BufferCreateInfo::default()
             .size(size as u64)
             .sharing_mode(sharing_mode)
@@ -53,11 +37,11 @@ impl Buffer {
     }
 
     // Quick and dirty - send the data direct to the GPU after allocating the memory.
-    pub fn upload_direct(&mut self, data: &[Vertex]) -> Result<(), BufferUploadError> {
+    pub fn upload_direct(&mut self, data: &[Vertex]) -> anyhow::Result<()> {
         let data_size = data.len() * Vertex::size();
 
         if data_size != self.size {
-            return Err(BufferUploadError::IncorrectSize);
+            return Err(anyhow::anyhow!("data size did not match buffer size"));
         }
 
         let requirements = unsafe {

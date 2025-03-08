@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use ash::prelude::VkResult;
-
 use super::device::{Device, DeviceQueue};
 
 pub struct CommandPool {
@@ -14,7 +12,7 @@ impl CommandPool {
         device: Arc<Device>,
         queue: &DeviceQueue,
         flags: ash::vk::CommandPoolCreateFlags,
-    ) -> VkResult<Self> {
+    ) -> anyhow::Result<Self> {
         let info = ash::vk::CommandPoolCreateInfo::default()
             .flags(flags)
             .queue_family_index(queue.idx);
@@ -43,7 +41,7 @@ pub struct CommandBuffer {
 }
 
 impl CommandBuffer {
-    pub fn new(device: Arc<Device>, pool: &CommandPool) -> VkResult<Self> {
+    pub fn new(device: Arc<Device>, pool: &CommandPool) -> anyhow::Result<Self> {
         let info = ash::vk::CommandBufferAllocateInfo::default()
             .command_pool(pool.handle())
             .command_buffer_count(1)
@@ -54,7 +52,7 @@ impl CommandBuffer {
         Ok(Self { device, handle })
     }
 
-    pub fn begin(&self, usage_flags: ash::vk::CommandBufferUsageFlags) -> VkResult<()> {
+    pub fn begin(&self, usage_flags: ash::vk::CommandBufferUsageFlags) -> anyhow::Result<()> {
         let info = ash::vk::CommandBufferBeginInfo::default().flags(usage_flags);
 
         unsafe {
@@ -66,7 +64,7 @@ impl CommandBuffer {
         Ok(())
     }
 
-    pub fn end(&self) -> VkResult<()> {
+    pub fn end(&self) -> anyhow::Result<()> {
         unsafe { self.device.handle().end_command_buffer(self.handle)? };
 
         Ok(())

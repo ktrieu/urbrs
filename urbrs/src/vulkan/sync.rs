@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use ash::prelude::VkResult;
-
 use super::device::Device;
 
 pub struct Semaphore {
@@ -10,7 +8,7 @@ pub struct Semaphore {
 }
 
 impl Semaphore {
-    pub fn new(device: Arc<Device>, flags: ash::vk::SemaphoreCreateFlags) -> VkResult<Self> {
+    pub fn new(device: Arc<Device>, flags: ash::vk::SemaphoreCreateFlags) -> anyhow::Result<Self> {
         let info = ash::vk::SemaphoreCreateInfo::default().flags(flags);
 
         let handle = unsafe { device.handle().create_semaphore(&info, None)? };
@@ -48,7 +46,7 @@ pub struct Fence {
 }
 
 impl Fence {
-    pub fn new(device: Arc<Device>, flags: ash::vk::FenceCreateFlags) -> VkResult<Self> {
+    pub fn new(device: Arc<Device>, flags: ash::vk::FenceCreateFlags) -> anyhow::Result<Self> {
         let info = ash::vk::FenceCreateInfo::default().flags(flags);
 
         let handle = unsafe { device.handle().create_fence(&info, None)? };
@@ -56,7 +54,7 @@ impl Fence {
         Ok(Self { device, handle })
     }
 
-    pub fn wait(&self, timeout_ns: u64) -> VkResult<()> {
+    pub fn wait(&self, timeout_ns: u64) -> anyhow::Result<()> {
         unsafe {
             self.device
                 .handle()
@@ -66,7 +64,7 @@ impl Fence {
         Ok(())
     }
 
-    pub fn reset(&self) -> VkResult<()> {
+    pub fn reset(&self) -> anyhow::Result<()> {
         unsafe { self.device.handle().reset_fences(&[self.handle])? };
 
         Ok(())

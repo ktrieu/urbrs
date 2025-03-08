@@ -2,7 +2,7 @@ use std::{fmt::Display, sync::Arc};
 
 use ash::prelude::VkResult;
 
-use super::device::Device;
+use super::{device::Device, mesh::VertexLayoutInfo};
 
 struct ShaderModule {
     device: Arc<Device>,
@@ -110,6 +110,8 @@ pub struct PipelineBuilder<'s> {
 
     color_format: Option<ash::vk::Format>,
     depth_format: Option<ash::vk::Format>,
+
+    vertex_layout_info: Option<VertexLayoutInfo>,
 }
 
 impl<'s> PipelineBuilder<'s> {
@@ -119,6 +121,7 @@ impl<'s> PipelineBuilder<'s> {
             fragment_shader_data: None,
             color_format: None,
             depth_format: None,
+            vertex_layout_info: None,
         }
     }
 
@@ -150,6 +153,13 @@ impl<'s> PipelineBuilder<'s> {
         }
     }
 
+    pub fn with_vertex_layout_info(self, info: VertexLayoutInfo) -> Self {
+        Self {
+            vertex_layout_info: Some(info),
+            ..self
+        }
+    }
+
     pub fn build(self, device: Arc<Device>) -> Result<Pipeline, PipelineBuildError> {
         let vertex_shader_data = self
             .vertex_shader_data
@@ -176,7 +186,13 @@ impl<'s> PipelineBuilder<'s> {
             .viewport_count(1)
             .scissor_count(1);
 
-        let vertex_input_info = ash::vk::PipelineVertexInputStateCreateInfo::default();
+        let vertex_input_info = if let Some(vertex_layout_info) = &self.vertex_layout_info {
+            ash::vk::PipelineVertexInputStateCreateInfo::default()
+                .vertex_binding_descriptions(&vertex_layout_info.bindings)
+                .vertex_attribute_descriptions(&vertex_layout_info.descs)
+        } else {
+            ash::vk::PipelineVertexInputStateCreateInfo::default()
+        };
 
         let color_attachment = ash::vk::PipelineColorBlendAttachmentState::default()
             .color_write_mask(ash::vk::ColorComponentFlags::RGBA)

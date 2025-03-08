@@ -1,7 +1,9 @@
+pub mod buffer;
 pub mod command;
 pub mod context;
 pub mod device;
 pub mod instance;
+pub mod mesh;
 pub mod phys_device;
 pub mod pipeline;
 pub mod surface;

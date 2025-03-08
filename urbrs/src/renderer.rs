@@ -3,8 +3,11 @@ use std::{fmt::Display, path::Path, sync::Arc, time::Instant};
 use ash::prelude::VkResult;
 
 use crate::vulkan::{
+    buffer::Buffer,
     command::{CommandBuffer, CommandPool},
+    context::Context,
     device::Device,
+    mesh::Vertex,
     pipeline::{Pipeline, PipelineBuildError, PipelineBuilder},
     swapchain::Swapchain,
     sync::{Fence, Semaphore},
@@ -25,6 +28,9 @@ pub struct Renderer {
     render_complete: Semaphore,
 
     graphics_pipeline: Pipeline,
+
+    // Test...
+    vertex_buffer: Buffer,
 }
 
 #[derive(Debug)]
@@ -62,11 +68,28 @@ impl Display for RendererCreateError {
     }
 }
 
+const VERTEX_DATA: [Vertex; 3] = [
+    Vertex {
+        position: glam::vec3(1.0, 1.0, 0.0),
+        color: glam::vec3(1.0, 0.0, 0.0),
+    },
+    Vertex {
+        position: glam::vec3(-1.0, 1.0, 0.0),
+        color: glam::vec3(0.0, 1.0, 0.0),
+    },
+    Vertex {
+        position: glam::vec3(0.0, -1.0, 0.0),
+        color: glam::vec3(0.0, 0.0, 1.0),
+    },
+];
+
 impl Renderer {
     pub fn new(
-        device: Arc<Device>,
+        context: Arc<Context>,
         swapchain: Arc<Swapchain>,
     ) -> Result<Self, RendererCreateError> {
+        let device = context.device();
+
         let command_pool = CommandPool::new(
             device.clone(),
             device.graphics_queue(),
@@ -88,7 +111,19 @@ impl Renderer {
             .with_depth_format(ash::vk::Format::UNDEFINED)
             .with_vertex_shader_data(&vertex_shader_data)
             .with_fragment_shader_data(&fragment_shader_data)
+            .with_vertex_layout_info(Vertex::layout())
             .build(device.clone())?;
+
+        // test code to upload the buffer...
+        let size = Vertex::size() * VERTEX_DATA.len();
+        let mut vertex_buffer = Buffer::new(
+            context,
+            size,
+            ash::vk::BufferUsageFlags::VERTEX_BUFFER,
+            ash::vk::SharingMode::EXCLUSIVE,
+        )?;
+
+        vertex_buffer.upload_direct(&VERTEX_DATA).unwrap();
 
         Ok(Self {
             device,
@@ -100,6 +135,7 @@ impl Renderer {
             swap_acquired,
             render_complete,
             graphics_pipeline,
+            vertex_buffer,
         })
     }
 
@@ -151,6 +187,13 @@ impl Renderer {
                 self.command_buffer.handle(),
                 ash::vk::PipelineBindPoint::GRAPHICS,
                 self.graphics_pipeline.handle(),
+            );
+
+            self.device.handle().cmd_bind_vertex_buffers(
+                self.command_buffer.handle(),
+                0,
+                &[self.vertex_buffer.handle()],
+                &[0],
             );
 
             let viewports = &[viewport];

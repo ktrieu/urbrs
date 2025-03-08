@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use winit::{
     dpi::PhysicalSize,
     event_loop::ActiveEventLoop,
@@ -8,7 +10,7 @@ use crate::{renderer::Renderer, vulkan::context::Context};
 
 pub struct Window {
     handle: winit::window::Window,
-    context: Context,
+    context: Arc<Context>,
     renderer: Renderer,
 }
 
@@ -32,10 +34,12 @@ impl Window {
             .expect("window handle should be valid")
             .as_raw();
 
-        let context = Context::new(&winit_window, display_handle, raw_window_handle)
-            .expect("context creation should succeed");
+        let context = Arc::new(
+            Context::new(&winit_window, display_handle, raw_window_handle)
+                .expect("context creation should succeed"),
+        );
 
-        let renderer = Renderer::new(context.device(), context.swapchain())
+        let renderer = Renderer::new(context.clone(), context.swapchain())
             .expect("renderer creation should succeed");
 
         Self {

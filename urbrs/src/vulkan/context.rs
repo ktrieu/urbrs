@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ash::prelude::VkResult;
 use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
@@ -15,12 +15,14 @@ pub struct Context {
     _surface: Arc<Surface>,
     device: Arc<Device>,
     swapchain: Arc<Swapchain>,
+    allocator: Arc<Mutex<gpu_allocator::vulkan::Allocator>>,
 }
 
 #[derive(Debug)]
 pub enum ContextCreateError {
     InstanceError(InstanceCreateError),
     VkError(ash::vk::Result),
+    AllocatorError(gpu_allocator::AllocationError),
     NoDevice,
 }
 
@@ -36,6 +38,12 @@ impl From<ash::vk::Result> for ContextCreateError {
     }
 }
 
+impl From<gpu_allocator::AllocationError> for ContextCreateError {
+    fn from(value: gpu_allocator::AllocationError) -> Self {
+        ContextCreateError::AllocatorError(value)
+    }
+}
+
 impl Display for ContextCreateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -46,6 +54,9 @@ impl Display for ContextCreateError {
                 write!(f, "vulkan error: {vk_error}")
             }
             ContextCreateError::NoDevice => write!(f, "no suitable device found"),
+            ContextCreateError::AllocatorError(allocation_error) => {
+                write!(f, "gpu allocation error: {allocation_error}")
+            }
         }
     }
 }
@@ -76,11 +87,26 @@ impl Context {
             window,
         )?);
 
+        let alloc_create_desc = gpu_allocator::vulkan::AllocatorCreateDesc {
+            instance: instance.handle().clone(),
+            device: device.handle().clone(),
+            physical_device: device.physical_device().handle(),
+            debug_settings: gpu_allocator::AllocatorDebugSettings::default(),
+            // TODO: yeah this should be supported.
+            buffer_device_address: true,
+            allocation_sizes: gpu_allocator::AllocationSizes::default(),
+        };
+
+        let allocator = Arc::new(Mutex::new(gpu_allocator::vulkan::Allocator::new(
+            &alloc_create_desc,
+        )?));
+
         Ok(Self {
             _instance: instance,
             _surface: surface,
             device,
             swapchain,
+            allocator,
         })
     }
 
@@ -90,6 +116,24 @@ impl Context {
 
     pub fn swapchain(&self) -> Arc<Swapchain> {
         self.swapchain.clone()
+    }
+
+    pub fn alloc_gpu_mem(
+        &self,
+        desc: &gpu_allocator::vulkan::AllocationCreateDesc,
+    ) -> VkResult<gpu_allocator::vulkan::Allocation> {
+        let mut allocator = self.allocator.lock().unwrap();
+
+        // It's fine I'm just going to anyhow this soon anyway.
+        Ok(allocator.allocate(desc).unwrap())
+    }
+
+    pub fn free_gpu_mem(&self, allocation: gpu_allocator::vulkan::Allocation) -> VkResult<()> {
+        let mut allocator = self.allocator.lock().unwrap();
+
+        allocator.free(allocation).unwrap();
+
+        Ok(())
     }
 
     pub fn wait_idle(&self) -> VkResult<()> {

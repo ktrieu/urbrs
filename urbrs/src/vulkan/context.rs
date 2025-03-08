@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ash::prelude::VkResult;
 use winit::raw_window_handle::{RawDisplayHandle, RawWindowHandle};
@@ -15,7 +15,7 @@ pub struct Context {
     _surface: Arc<Surface>,
     device: Arc<Device>,
     swapchain: Arc<Swapchain>,
-    allocator: Arc<gpu_allocator::vulkan::Allocator>,
+    allocator: Arc<Mutex<gpu_allocator::vulkan::Allocator>>,
 }
 
 #[derive(Debug)]
@@ -97,7 +97,9 @@ impl Context {
             allocation_sizes: gpu_allocator::AllocationSizes::default(),
         };
 
-        let allocator = Arc::new(gpu_allocator::vulkan::Allocator::new(&alloc_create_desc)?);
+        let allocator = Arc::new(Mutex::new(gpu_allocator::vulkan::Allocator::new(
+            &alloc_create_desc,
+        )?));
 
         Ok(Self {
             _instance: instance,
@@ -114,6 +116,16 @@ impl Context {
 
     pub fn swapchain(&self) -> Arc<Swapchain> {
         self.swapchain.clone()
+    }
+
+    pub fn alloc_gpu_mem(
+        &self,
+        desc: &gpu_allocator::vulkan::AllocationCreateDesc,
+    ) -> VkResult<gpu_allocator::vulkan::Allocation> {
+        let mut allocator = self.allocator.lock().unwrap();
+
+        // It's fine I'm just going to anyhow this soon anyway.
+        Ok(allocator.allocate(desc).unwrap())
     }
 
     pub fn wait_idle(&self) -> VkResult<()> {

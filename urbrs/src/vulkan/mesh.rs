@@ -35,6 +35,10 @@ impl Vertex {
 
         VertexLayoutInfo { descs, bindings }
     }
+
+    pub fn size() -> usize {
+        size_of::<Self>()
+    }
 }
 
 pub struct Mesh {
@@ -44,7 +48,7 @@ pub struct Mesh {
 impl Mesh {
     pub fn new_from_raw_data(vertices: &[Vertex]) -> Self {
         Self {
-            vertices: Vec::from(vertices)
+            vertices: Vec::from(vertices),
         }
     }
 }

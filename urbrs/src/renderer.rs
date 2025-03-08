@@ -115,11 +115,7 @@ impl Renderer {
 
         util::swap_acquire_transition(self.device.clone(), &self.command_buffer, swap_image.image);
 
-        let mut clear_value = ash::vk::ClearValue::default();
-
-        let elapsed = self.start.elapsed().as_secs_f32().fract();
-
-        clear_value.color.float32 = [1.0f32, elapsed, 1.0f32, 1.0f32];
+        let clear_value = ash::vk::ClearValue::default();
 
         let color_attachment_info = ash::vk::RenderingAttachmentInfo::default()
             .image_view(swap_image.view)

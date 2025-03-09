@@ -39,4 +39,11 @@ impl Vertex {
     pub fn size() -> usize {
         size_of::<Self>()
     }
+
+    pub const fn new_pos(x: f32, y: f32, z: f32) -> Self {
+        Self {
+            position: glam::vec3(x, y, z),
+            color: glam::vec3(1.0, 1.0, 1.0),
+        }
+    }
 }

@@ -1,2 +1,5 @@
 /target
 /data
+
+# renderdoc capture settings
+*.cap

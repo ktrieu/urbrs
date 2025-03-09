@@ -31,21 +31,27 @@ pub struct Renderer {
 
     // Test...
     vertex_buffer: Buffer,
+    index_buffer: Buffer,
 }
 
-const VERTEX_DATA: [Vertex; 3] = [
-    Vertex {
-        position: glam::vec3(1.0, 1.0, 0.0),
-        color: glam::vec3(1.0, 0.0, 0.0),
-    },
-    Vertex {
-        position: glam::vec3(-1.0, 1.0, 0.0),
-        color: glam::vec3(0.0, 1.0, 0.0),
-    },
-    Vertex {
-        position: glam::vec3(0.0, -1.0, 0.0),
-        color: glam::vec3(0.0, 0.0, 1.0),
-    },
+const VERTEX_DATA: [Vertex; 8] = [
+    Vertex::new_pos(0.0, 0.0, 0.0),
+    Vertex::new_pos(1.0, 0.0, 0.0),
+    Vertex::new_pos(0.0, -1.0, 0.0),
+    Vertex::new_pos(1.0, -1.0, 0.0),
+    Vertex::new_pos(0.0, 0.0, 1.0),
+    Vertex::new_pos(1.0, 0.0, 1.0),
+    Vertex::new_pos(0.0, -1.0, 1.0),
+    Vertex::new_pos(1.0, -1.0, 1.0),
+];
+
+const INDEX_DATA: [u16; 36] = [
+    0, 2, 1, 1, 2, 3, // front
+    5, 6, 4, 5, 7, 6, // back
+    2, 6, 3, 3, 6, 7, // top
+    0, 1, 4, 1, 5, 4, // bottom
+    0, 4, 2, 4, 6, 2, // left
+    1, 3, 5, 5, 3, 7, // right
 ];
 
 impl Renderer {
@@ -78,16 +84,42 @@ impl Renderer {
             .with_vertex_layout_info(Vertex::layout())
             .build(device.clone())?;
 
+        // transform on CPU for now until we get uniforms working
+        let view = glam::Mat4::from_translation(glam::vec3(-0.5, 0.5, 1.0));
+
+        let model = glam::Mat4::from_euler(
+            glam::EulerRot::XYZ,
+            f32::to_radians(45.0),
+            f32::to_radians(45.0),
+            0.0,
+        );
+
+        let mvp = view * model;
+
+        let mut vertex_data = VERTEX_DATA;
+        for v in vertex_data.iter_mut() {
+            v.position = mvp.project_point3(v.position);
+        }
+
         // test code to upload the buffer...
-        let size = Vertex::size() * VERTEX_DATA.len();
+        let size = Vertex::size() * vertex_data.len();
         let mut vertex_buffer = Buffer::new(
-            context,
+            context.clone(),
             size,
             ash::vk::BufferUsageFlags::VERTEX_BUFFER,
             ash::vk::SharingMode::EXCLUSIVE,
         )?;
 
-        vertex_buffer.upload_direct(&VERTEX_DATA).unwrap();
+        vertex_buffer.upload_direct(&vertex_data)?;
+
+        let size = size_of::<u16>() * INDEX_DATA.len();
+        let mut index_buffer = Buffer::new(
+            context.clone(),
+            size,
+            ash::vk::BufferUsageFlags::INDEX_BUFFER,
+            ash::vk::SharingMode::EXCLUSIVE,
+        )?;
+        index_buffer.upload_direct(&INDEX_DATA)?;
 
         Ok(Self {
             device,
@@ -100,6 +132,7 @@ impl Renderer {
             render_complete,
             graphics_pipeline,
             vertex_buffer,
+            index_buffer,
         })
     }
 
@@ -115,7 +148,8 @@ impl Renderer {
 
         util::swap_acquire_transition(self.device.clone(), &self.command_buffer, swap_image.image);
 
-        let clear_value = ash::vk::ClearValue::default();
+        let mut clear_value = ash::vk::ClearValue::default();
+        // clear_value.color.float32 = [1.0, 1.0, 1.0, 1.0];
 
         let color_attachment_info = ash::vk::RenderingAttachmentInfo::default()
             .image_view(swap_image.view)
@@ -156,6 +190,13 @@ impl Renderer {
                 &[0],
             );
 
+            self.device.handle().cmd_bind_index_buffer(
+                self.command_buffer.handle(),
+                self.index_buffer.handle(),
+                0,
+                ash::vk::IndexType::UINT16,
+            );
+
             let viewports = &[viewport];
             self.device
                 .handle()
@@ -168,7 +209,7 @@ impl Renderer {
 
             self.device
                 .handle()
-                .cmd_draw(self.command_buffer.handle(), 3, 1, 0, 0);
+                .cmd_draw_indexed(self.command_buffer.handle(), 36, 1, 0, 0, 0);
 
             self.device
                 .handle()

@@ -37,8 +37,8 @@ impl Buffer {
     }
 
     // Quick and dirty - send the data direct to the GPU after allocating the memory.
-    pub fn upload_direct(&mut self, data: &[Vertex]) -> anyhow::Result<()> {
-        let data_size = data.len() * Vertex::size();
+    pub fn upload_direct<T>(&mut self, data: &[T]) -> anyhow::Result<()> {
+        let data_size = data.len() * size_of::<T>();
 
         if data_size != self.size {
             return Err(anyhow::anyhow!("data size did not match buffer size"));

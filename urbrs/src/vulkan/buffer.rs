@@ -1,6 +1,6 @@
 use std::{ffi::c_void, ptr::NonNull, sync::Arc};
 
-use super::{context::Context, mesh::Vertex};
+use super::context::Context;
 
 pub struct Buffer {
     context: Arc<Context>,

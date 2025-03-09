@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{path::Path, sync::Arc};
 
 use anyhow::Context as anyhow_context;
 
@@ -20,8 +20,6 @@ pub struct Renderer {
 
     _command_pool: CommandPool,
     command_buffer: CommandBuffer,
-
-    start: Instant,
 
     render_fence: Fence,
     swap_acquired: Semaphore,
@@ -126,7 +124,6 @@ impl Renderer {
             swapchain,
             _command_pool: command_pool,
             command_buffer,
-            start: Instant::now(),
             render_fence,
             swap_acquired,
             render_complete,
@@ -148,8 +145,7 @@ impl Renderer {
 
         util::swap_acquire_transition(self.device.clone(), &self.command_buffer, swap_image.image);
 
-        let mut clear_value = ash::vk::ClearValue::default();
-        // clear_value.color.float32 = [1.0, 1.0, 1.0, 1.0];
+        let clear_value = ash::vk::ClearValue::default();
 
         let color_attachment_info = ash::vk::RenderingAttachmentInfo::default()
             .image_view(swap_image.view)

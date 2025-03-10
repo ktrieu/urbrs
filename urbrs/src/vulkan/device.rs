@@ -50,6 +50,10 @@ impl Device {
         let mut sync_2 =
             ash::vk::PhysicalDeviceSynchronization2Features::default().synchronization2(true);
 
+        let mut buffer_device_address =
+            ash::vk::PhysicalDeviceBufferDeviceAddressFeatures::default()
+                .buffer_device_address(true);
+
         let required_extensions: Vec<*const i8> = PhysicalDevice::REQUIRED_EXTENSIONS
             .iter()
             .map(|s| s.as_ptr())
@@ -76,7 +80,8 @@ impl Device {
             .enabled_extension_names(required_extensions.as_slice())
             .queue_create_infos(&queue_infos)
             .push_next(&mut dynamic_rendering)
-            .push_next(&mut sync_2);
+            .push_next(&mut sync_2)
+            .push_next(&mut buffer_device_address);
 
         let device = unsafe {
             instance

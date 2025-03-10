@@ -152,6 +152,16 @@ impl PhysicalDevice {
 
         let features = instance.get_physical_device_features(handle);
 
+        let mut features2 = ash::vk::PhysicalDeviceFeatures2::default();
+        let mut buffer_device_addr_features =
+            ash::vk::PhysicalDeviceBufferDeviceAddressFeatures::default();
+        features2 = features2.push_next(&mut buffer_device_addr_features);
+
+        instance.get_physical_device_features2(handle, &mut features2);
+        if buffer_device_addr_features.buffer_device_address == 0 {
+            return Err(anyhow::anyhow!("buffer device address not supported"));
+        }
+
         let extensions = instance.enumerate_device_extension_properties(handle)?;
 
         let unsupported_extensions: Vec<&CStr> = Self::REQUIRED_EXTENSIONS

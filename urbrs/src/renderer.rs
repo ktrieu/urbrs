@@ -1,6 +1,7 @@
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Instant};
 
 use anyhow::Context as anyhow_context;
+use bytemuck::bytes_of;
 
 use crate::vulkan::{
     buffer::Buffer,
@@ -20,6 +21,8 @@ pub struct Renderer {
 
     _command_pool: CommandPool,
     command_buffer: CommandBuffer,
+
+    start: Instant,
 
     render_fence: Fence,
     swap_acquired: Semaphore,
@@ -80,27 +83,11 @@ impl Renderer {
             .with_vertex_shader_data(&vertex_shader_data)
             .with_fragment_shader_data(&fragment_shader_data)
             .with_vertex_layout_info(Vertex::layout())
+            .with_push_constants::<glam::Mat4>()
             .build(device.clone())?;
 
-        // transform on CPU for now until we get uniforms working
-        let view = glam::Mat4::from_translation(glam::vec3(-0.5, 0.5, 1.0));
-
-        let model = glam::Mat4::from_euler(
-            glam::EulerRot::XYZ,
-            f32::to_radians(45.0),
-            f32::to_radians(45.0),
-            0.0,
-        );
-
-        let mvp = view * model;
-
-        let mut vertex_data = VERTEX_DATA;
-        for v in vertex_data.iter_mut() {
-            v.position = mvp.project_point3(v.position);
-        }
-
         // test code to upload the buffer...
-        let size = Vertex::size() * vertex_data.len();
+        let size = Vertex::size() * VERTEX_DATA.len();
         let mut vertex_buffer = Buffer::new(
             context.clone(),
             size,
@@ -109,7 +96,7 @@ impl Renderer {
         )?;
 
         vertex_buffer.allocate_full()?;
-        vertex_buffer.update_mapped_data(&vertex_data)?;
+        vertex_buffer.update_mapped_data(&VERTEX_DATA)?;
 
         let size = size_of::<u16>() * INDEX_DATA.len();
         let mut index_buffer = Buffer::new(
@@ -132,6 +119,7 @@ impl Renderer {
             graphics_pipeline,
             vertex_buffer,
             index_buffer,
+            start: Instant::now(),
         })
     }
 
@@ -139,6 +127,25 @@ impl Renderer {
         // Wait one sec for the fence to be available.
         self.render_fence.wait(1_000_000_000)?;
         self.render_fence.reset()?;
+
+        let projection =
+            glam::Mat4::perspective_rh(f32::to_radians(45.0), 1920.0 / 1080.0, 0.001, 1000.0);
+
+        let dt = Instant::now().duration_since(self.start).as_secs_f32();
+
+        let view = glam::Mat4::from_rotation_translation(
+            glam::Quat::from_euler(
+                glam::EulerRot::XYZ,
+                f32::to_radians(45.0),
+                f32::to_radians((dt / 10.0).sin() * 360.0).abs(),
+                0.0,
+            ),
+            glam::vec3(-0.5, 0.5, -3.0),
+        );
+
+        let model = glam::Mat4::IDENTITY;
+
+        let mvp = projection * view * model;
 
         self.command_buffer
             .begin(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?;
@@ -166,7 +173,8 @@ impl Renderer {
         let viewport = ash::vk::Viewport::default()
             .max_depth(1.0f32)
             .width(1920.0f32)
-            .height(1080.0f32);
+            .height(-1080.0f32)
+            .y(1080.0);
 
         let scissor = self.swapchain.swap_area();
 
@@ -193,6 +201,14 @@ impl Renderer {
                 self.index_buffer.handle(),
                 0,
                 ash::vk::IndexType::UINT16,
+            );
+
+            self.device.handle().cmd_push_constants(
+                self.command_buffer.handle(),
+                self.graphics_pipeline.layout(),
+                ash::vk::ShaderStageFlags::ALL_GRAPHICS,
+                0,
+                bytes_of(&mvp),
             );
 
             let viewports = &[viewport];

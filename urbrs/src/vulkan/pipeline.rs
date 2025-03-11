@@ -52,6 +52,10 @@ impl Pipeline {
     pub fn handle(&self) -> ash::vk::Pipeline {
         self.handle
     }
+
+    pub fn layout(&self) -> ash::vk::PipelineLayout {
+        self.layout
+    }
 }
 
 impl Drop for Pipeline {
@@ -72,6 +76,8 @@ pub struct PipelineBuilder<'s> {
     color_format: Option<ash::vk::Format>,
     depth_format: Option<ash::vk::Format>,
 
+    push_constant_range: Option<ash::vk::PushConstantRange>,
+
     vertex_layout_info: Option<VertexLayoutInfo>,
 }
 
@@ -83,6 +89,7 @@ impl<'s> PipelineBuilder<'s> {
             color_format: None,
             depth_format: None,
             vertex_layout_info: None,
+            push_constant_range: None,
         }
     }
 
@@ -117,6 +124,20 @@ impl<'s> PipelineBuilder<'s> {
     pub fn with_vertex_layout_info(self, info: VertexLayoutInfo) -> Self {
         Self {
             vertex_layout_info: Some(info),
+            ..self
+        }
+    }
+
+    pub fn with_push_constants<T>(self) -> Self {
+        let size = size_of::<T>();
+
+        let range = ash::vk::PushConstantRange::default()
+            .offset(0)
+            .size(size as u32)
+            .stage_flags(ash::vk::ShaderStageFlags::ALL_GRAPHICS);
+
+        Self {
+            push_constant_range: Some(range),
             ..self
         }
     }
@@ -210,7 +231,13 @@ impl<'s> PipelineBuilder<'s> {
             ash::vk::DynamicState::SCISSOR,
         ]);
 
-        let layout_info = ash::vk::PipelineLayoutCreateInfo::default();
+        let mut push_constant_ranges: Vec<ash::vk::PushConstantRange> = Vec::new();
+        if let Some(range) = self.push_constant_range {
+            push_constant_ranges.push(range);
+        }
+
+        let layout_info = ash::vk::PipelineLayoutCreateInfo::default()
+            .push_constant_ranges(&push_constant_ranges);
 
         let layout = unsafe { device.handle().create_pipeline_layout(&layout_info, None)? };
 

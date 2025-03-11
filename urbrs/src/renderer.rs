@@ -108,7 +108,8 @@ impl Renderer {
             ash::vk::SharingMode::EXCLUSIVE,
         )?;
 
-        vertex_buffer.upload_direct(&vertex_data)?;
+        vertex_buffer.allocate_full()?;
+        vertex_buffer.update_mapped_data(&vertex_data)?;
 
         let size = size_of::<u16>() * INDEX_DATA.len();
         let mut index_buffer = Buffer::new(
@@ -117,7 +118,8 @@ impl Renderer {
             ash::vk::BufferUsageFlags::INDEX_BUFFER,
             ash::vk::SharingMode::EXCLUSIVE,
         )?;
-        index_buffer.upload_direct(&INDEX_DATA)?;
+        index_buffer.allocate_full()?;
+        index_buffer.update_mapped_data(&INDEX_DATA)?;
 
         Ok(Self {
             device,

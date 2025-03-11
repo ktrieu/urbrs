@@ -36,14 +36,8 @@ impl Buffer {
         self.handle
     }
 
-    // Quick and dirty - send the data direct to the GPU after allocating the memory.
-    pub fn upload_direct<T>(&mut self, data: &[T]) -> anyhow::Result<()> {
-        let data_size = data.len() * size_of::<T>();
-
-        if data_size != self.size {
-            return Err(anyhow::anyhow!("data size did not match buffer size"));
-        }
-
+    // Make one allocation for the entire buffer. Not very clever - but we're just testing stuff right now.
+    pub fn allocate_full(&mut self) -> anyhow::Result<()> {
         let requirements = unsafe {
             self.context
                 .device()
@@ -61,7 +55,6 @@ impl Buffer {
             ),
         };
 
-        // don't worry about it.
         let allocation = self.context.alloc_gpu_mem(&desc)?;
 
         unsafe {
@@ -70,7 +63,27 @@ impl Buffer {
                 allocation.memory(),
                 allocation.offset(),
             )?;
+        }
 
+        self.allocation = Some(allocation);
+
+        Ok(())
+    }
+
+    // Quick and dirty - send the data direct to the GPU after allocating the memory.
+    pub fn update_mapped_data<T>(&mut self, data: &[T]) -> anyhow::Result<()> {
+        let data_size = data.len() * size_of::<T>();
+
+        if data_size != self.size {
+            return Err(anyhow::anyhow!("data size did not match buffer size"));
+        }
+
+        let allocation = self
+            .allocation
+            .as_ref()
+            .ok_or(anyhow::anyhow!("cannot update data for unallocated buffer"))?;
+
+        unsafe {
             // Our buffer is host visible because we just asked for it.
             let ptr = allocation.mapped_ptr().unwrap();
             ptr.copy_from_nonoverlapping(
@@ -79,8 +92,6 @@ impl Buffer {
                 self.size as usize,
             );
         };
-
-        self.allocation = Some(allocation);
 
         Ok(())
     }

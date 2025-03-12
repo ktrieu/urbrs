@@ -1,8 +1,9 @@
-use std::ffi::CStr;
+use std::{ffi::CStr, sync::Arc};
 
-use super::surface::Surface;
+use super::{instance::Instance, surface::Surface};
 
 pub struct PhysicalDevice {
+    instance: Arc<Instance>,
     handle: ash::vk::PhysicalDevice,
     _properties: ash::vk::PhysicalDeviceProperties,
     _features: ash::vk::PhysicalDeviceFeatures,
@@ -20,13 +21,13 @@ pub struct PhysicalDevice {
 
 impl PhysicalDevice {
     pub fn select_device(
-        instance: &ash::Instance,
+        instance: Arc<Instance>,
         surface: &Surface,
     ) -> anyhow::Result<Option<Self>> {
-        let device_handles = unsafe { instance.enumerate_physical_devices() }?;
+        let device_handles = unsafe { instance.handle().enumerate_physical_devices() }?;
 
         let mut devices = device_handles.iter().filter_map(|handle| unsafe {
-            Self::new(instance, surface, *handle)
+            Self::new(instance.clone(), surface, *handle)
                 .inspect_err(|err| {
                     println!("error creating physical device: {err}. skipping device.")
                 })
@@ -141,28 +142,34 @@ impl PhysicalDevice {
     ];
 
     unsafe fn new(
-        instance: &ash::Instance,
+        instance: Arc<Instance>,
         surface: &Surface,
         handle: ash::vk::PhysicalDevice,
     ) -> anyhow::Result<Self> {
         let mut properties = ash::vk::PhysicalDeviceProperties2::default();
-        instance.get_physical_device_properties2(handle, &mut properties);
+        instance
+            .handle()
+            .get_physical_device_properties2(handle, &mut properties);
 
         let properties = properties.properties;
 
-        let features = instance.get_physical_device_features(handle);
+        let features = instance.handle().get_physical_device_features(handle);
 
         let mut features2 = ash::vk::PhysicalDeviceFeatures2::default();
         let mut buffer_device_addr_features =
             ash::vk::PhysicalDeviceBufferDeviceAddressFeatures::default();
         features2 = features2.push_next(&mut buffer_device_addr_features);
 
-        instance.get_physical_device_features2(handle, &mut features2);
+        instance
+            .handle()
+            .get_physical_device_features2(handle, &mut features2);
         if buffer_device_addr_features.buffer_device_address == 0 {
             return Err(anyhow::anyhow!("buffer device address not supported"));
         }
 
-        let extensions = instance.enumerate_device_extension_properties(handle)?;
+        let extensions = instance
+            .handle()
+            .enumerate_device_extension_properties(handle)?;
 
         let unsupported_extensions: Vec<&CStr> = Self::REQUIRED_EXTENSIONS
             .iter()
@@ -177,12 +184,15 @@ impl PhysicalDevice {
             ));
         }
 
-        let queue_families_len = instance.get_physical_device_queue_family_properties2_len(handle);
+        let queue_families_len = instance
+            .handle()
+            .get_physical_device_queue_family_properties2_len(handle);
 
         let mut queue_families =
             vec![ash::vk::QueueFamilyProperties2::default(); queue_families_len];
 
         instance
+            .handle()
             .get_physical_device_queue_family_properties2(handle, queue_families.as_mut_slice());
 
         let queue_families: Vec<ash::vk::QueueFamilyProperties> = queue_families
@@ -223,6 +233,7 @@ impl PhysicalDevice {
             .ok_or(anyhow::anyhow!("no valid present mode available"))?;
 
         let phys_device = Self {
+            instance,
             handle,
             _properties: properties,
             _features: features,
@@ -237,6 +248,14 @@ impl PhysicalDevice {
         };
 
         Ok(phys_device)
+    }
+
+    pub fn get_format_properties(&self, format: ash::vk::Format) -> ash::vk::FormatProperties {
+        unsafe {
+            self.instance
+                .handle()
+                .get_physical_device_format_properties(self.handle(), format)
+        }
     }
 
     pub fn handle(&self) -> ash::vk::PhysicalDevice {

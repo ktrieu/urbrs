@@ -9,6 +9,7 @@ use crate::vulkan::{
     context::Context,
     device::Device,
     mesh::Vertex,
+    phys_device::PhysicalDevice,
     pipeline::{Pipeline, PipelineBuilder},
     swapchain::Swapchain,
     sync::{Fence, Semaphore},
@@ -35,6 +36,138 @@ const INDEX_DATA: [u16; 36] = [
     1, 3, 5, 5, 3, 7, // right
 ];
 
+struct DepthBuffer {
+    context: Arc<Context>,
+    image: ash::vk::Image,
+    allocation: gpu_allocator::vulkan::Allocation,
+    image_view: ash::vk::ImageView,
+    format: ash::vk::Format,
+}
+
+impl DepthBuffer {
+    const DESIRED_DEPTH_FORMATS: [ash::vk::Format; 3] = [
+        ash::vk::Format::D32_SFLOAT,
+        ash::vk::Format::D32_SFLOAT_S8_UINT,
+        ash::vk::Format::D24_UNORM_S8_UINT,
+    ];
+
+    fn select_depth_format(physical_device: &PhysicalDevice) -> Option<ash::vk::Format> {
+        for format in Self::DESIRED_DEPTH_FORMATS {
+            let props = physical_device.get_format_properties(format);
+            if props
+                .optimal_tiling_features
+                .contains(ash::vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT)
+            {
+                return Some(format);
+            }
+        }
+
+        None
+    }
+
+    pub fn new(context: Arc<Context>, width: u32, height: u32) -> anyhow::Result<Self> {
+        let depth_format = Self::select_depth_format(context.device().physical_device())
+            .ok_or(anyhow::anyhow!("no valid depth format found"))?;
+
+        let image_create_info = ash::vk::ImageCreateInfo::default()
+            .image_type(ash::vk::ImageType::TYPE_2D)
+            .extent(
+                ash::vk::Extent3D::default()
+                    .width(width)
+                    .height(height)
+                    .depth(1),
+            )
+            .mip_levels(1)
+            .array_layers(1)
+            .format(depth_format)
+            .tiling(ash::vk::ImageTiling::OPTIMAL)
+            .usage(ash::vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
+            .sharing_mode(ash::vk::SharingMode::EXCLUSIVE)
+            .samples(ash::vk::SampleCountFlags::TYPE_1);
+
+        unsafe {
+            let image = context
+                .device()
+                .handle()
+                .create_image(&image_create_info, None)?;
+
+            let mem_reqs = context
+                .device()
+                .handle()
+                .get_image_memory_requirements(image);
+
+            let allocation =
+                context.alloc_gpu_mem(&gpu_allocator::vulkan::AllocationCreateDesc {
+                    name: "depth_buffer",
+                    requirements: mem_reqs,
+                    location: gpu_allocator::MemoryLocation::GpuOnly,
+                    linear: false,
+                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::DedicatedImage(
+                        image,
+                    ),
+                })?;
+
+            context.device().handle().bind_image_memory(
+                image,
+                allocation.memory(),
+                allocation.offset(),
+            )?;
+
+            let mapping = ash::vk::ComponentMapping::default()
+                .r(ash::vk::ComponentSwizzle::IDENTITY)
+                .g(ash::vk::ComponentSwizzle::IDENTITY)
+                .b(ash::vk::ComponentSwizzle::IDENTITY)
+                .a(ash::vk::ComponentSwizzle::IDENTITY);
+
+            let range = ash::vk::ImageSubresourceRange::default()
+                .aspect_mask(ash::vk::ImageAspectFlags::DEPTH)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1);
+
+            let image_view_info = ash::vk::ImageViewCreateInfo::default()
+                .image(image)
+                .format(depth_format)
+                .view_type(ash::vk::ImageViewType::TYPE_2D)
+                .components(mapping)
+                .subresource_range(range);
+
+            let image_view = context
+                .device()
+                .handle()
+                .create_image_view(&image_view_info, None)?;
+
+            Ok(Self {
+                context,
+                image,
+                allocation,
+                image_view,
+                format: depth_format,
+            })
+        }
+    }
+}
+
+impl Drop for DepthBuffer {
+    fn drop(&mut self) {
+        let allocation = std::mem::take(&mut self.allocation);
+        self.context.free_gpu_mem(allocation).unwrap();
+
+        unsafe {
+            self.context
+                .device()
+                .handle()
+                .destroy_image_view(self.image_view, None);
+
+            self.context
+                .device()
+                .handle()
+                .destroy_image(self.image, None);
+        };
+    }
+}
+
 pub struct Renderer {
     device: Arc<Device>,
     swapchain: Arc<Swapchain>,
@@ -52,9 +185,10 @@ pub struct Renderer {
 
     window_size: winit::dpi::PhysicalSize<u32>,
 
-    // Test...
     vertex_buffer: Buffer,
     index_buffer: Buffer,
+
+    depth_buffer: DepthBuffer,
 }
 
 impl Renderer {
@@ -83,9 +217,15 @@ impl Renderer {
         let fragment_shader_data = util::read_spirv(Path::new("./data/shader/a.spv.frag"))
             .with_context(|| "failed to read vertex shader a.spv.frag")?;
 
+        let depth_buffer = DepthBuffer::new(
+            context.clone(),
+            swapchain.extent().width,
+            swapchain.extent().height,
+        )?;
+
         let graphics_pipeline = PipelineBuilder::new()
             .with_color_format(swapchain.surface_color_format())
-            .with_depth_format(ash::vk::Format::UNDEFINED)
+            .with_depth_format(depth_buffer.format)
             .with_vertex_shader_data(&vertex_shader_data)
             .with_fragment_shader_data(&fragment_shader_data)
             .with_vertex_layout_info(Vertex::layout())
@@ -127,6 +267,7 @@ impl Renderer {
             index_buffer,
             window_size,
             start: Instant::now(),
+            depth_buffer,
         })
     }
 
@@ -168,7 +309,8 @@ impl Renderer {
 
         util::swap_acquire_transition(self.device.clone(), &self.command_buffer, swap_image.image);
 
-        let clear_value = ash::vk::ClearValue::default();
+        let mut clear_value = ash::vk::ClearValue::default();
+        clear_value.depth_stencil = ash::vk::ClearDepthStencilValue::default().depth(1.0);
 
         let color_attachment_info = ash::vk::RenderingAttachmentInfo::default()
             .image_view(swap_image.view)
@@ -179,9 +321,17 @@ impl Renderer {
 
         let color_attachments = &[color_attachment_info];
 
+        let depth_attachment_info = ash::vk::RenderingAttachmentInfo::default()
+            .image_view(self.depth_buffer.image_view)
+            .image_layout(ash::vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
+            .load_op(ash::vk::AttachmentLoadOp::CLEAR)
+            .clear_value(clear_value)
+            .store_op(ash::vk::AttachmentStoreOp::STORE);
+
         let rendering_info = ash::vk::RenderingInfo::default()
             .color_attachments(color_attachments)
             .layer_count(1)
+            .depth_attachment(&depth_attachment_info)
             .render_area(self.swapchain.swap_area());
 
         let viewport = ash::vk::Viewport::default()

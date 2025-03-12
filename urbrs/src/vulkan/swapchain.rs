@@ -199,6 +199,10 @@ impl Swapchain {
             swap_area: extent.into(),
         })
     }
+
+    pub fn extent(&self) -> ash::vk::Extent2D {
+        self.swap_area.extent
+    }
 }
 
 impl Drop for Swapchain {

@@ -30,7 +30,7 @@ impl Context {
             display_handle,
         )?);
 
-        let phys_device = PhysicalDevice::select_device(&instance.handle(), &surface)?
+        let phys_device = PhysicalDevice::select_device(instance.clone(), &surface)?
             .ok_or(anyhow::anyhow!("no valid physical device found"))?;
 
         let device = Arc::new(Device::new(instance.clone(), phys_device)?);

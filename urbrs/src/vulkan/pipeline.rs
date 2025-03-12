@@ -204,9 +204,9 @@ impl<'s> PipelineBuilder<'s> {
             .alpha_to_one_enable(false);
 
         let depth_info = ash::vk::PipelineDepthStencilStateCreateInfo::default()
-            .depth_test_enable(false)
-            .depth_write_enable(false)
-            .depth_compare_op(ash::vk::CompareOp::NEVER)
+            .depth_test_enable(true)
+            .depth_write_enable(true)
+            .depth_compare_op(ash::vk::CompareOp::LESS)
             .depth_bounds_test_enable(false)
             .stencil_test_enable(false)
             .front(ash::vk::StencilOpState::default())

@@ -32,7 +32,11 @@ impl Window {
             raw_window_handle,
         )?);
 
-        let renderer = Renderer::new(context.clone(), context.swapchain())?;
+        let renderer = Renderer::new(
+            context.clone(),
+            context.swapchain(),
+            winit_window.inner_size(),
+        )?;
 
         Ok(Self {
             handle: winit_window,

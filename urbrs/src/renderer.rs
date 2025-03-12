@@ -15,26 +15,6 @@ use crate::vulkan::{
     util::{self},
 };
 
-pub struct Renderer {
-    device: Arc<Device>,
-    swapchain: Arc<Swapchain>,
-
-    _command_pool: CommandPool,
-    command_buffer: CommandBuffer,
-
-    start: Instant,
-
-    render_fence: Fence,
-    swap_acquired: Semaphore,
-    render_complete: Semaphore,
-
-    graphics_pipeline: Pipeline,
-
-    // Test...
-    vertex_buffer: Buffer,
-    index_buffer: Buffer,
-}
-
 const VERTEX_DATA: [Vertex; 8] = [
     Vertex::new_pos(0.0, 0.0, 0.0),
     Vertex::new_pos(1.0, 0.0, 0.0),
@@ -55,8 +35,34 @@ const INDEX_DATA: [u16; 36] = [
     1, 3, 5, 5, 3, 7, // right
 ];
 
+pub struct Renderer {
+    device: Arc<Device>,
+    swapchain: Arc<Swapchain>,
+
+    _command_pool: CommandPool,
+    command_buffer: CommandBuffer,
+
+    start: Instant,
+
+    render_fence: Fence,
+    swap_acquired: Semaphore,
+    render_complete: Semaphore,
+
+    graphics_pipeline: Pipeline,
+
+    window_size: winit::dpi::PhysicalSize<u32>,
+
+    // Test...
+    vertex_buffer: Buffer,
+    index_buffer: Buffer,
+}
+
 impl Renderer {
-    pub fn new(context: Arc<Context>, swapchain: Arc<Swapchain>) -> anyhow::Result<Self> {
+    pub fn new(
+        context: Arc<Context>,
+        swapchain: Arc<Swapchain>,
+        window_size: winit::dpi::PhysicalSize<u32>,
+    ) -> anyhow::Result<Self> {
         let device = context.device();
 
         let command_pool = CommandPool::new(
@@ -119,6 +125,7 @@ impl Renderer {
             graphics_pipeline,
             vertex_buffer,
             index_buffer,
+            window_size,
             start: Instant::now(),
         })
     }
@@ -128,8 +135,15 @@ impl Renderer {
         self.render_fence.wait(1_000_000_000)?;
         self.render_fence.reset()?;
 
-        let projection =
-            glam::Mat4::perspective_rh(f32::to_radians(45.0), 1920.0 / 1080.0, 0.001, 1000.0);
+        let wnd_width = self.window_size.width as f32;
+        let wnd_height = self.window_size.height as f32;
+
+        let projection = glam::Mat4::perspective_rh(
+            f32::to_radians(45.0),
+            wnd_width / wnd_height,
+            0.001,
+            1000.0,
+        );
 
         let dt = Instant::now().duration_since(self.start).as_secs_f32();
 
@@ -172,9 +186,11 @@ impl Renderer {
 
         let viewport = ash::vk::Viewport::default()
             .max_depth(1.0f32)
-            .width(1920.0f32)
-            .height(-1080.0f32)
-            .y(1080.0);
+            .width(wnd_width)
+            // These are little weird so that we can flip the viewport and have Y up,
+            // like good old OpenGL.
+            .height(-wnd_height)
+            .y(wnd_height);
 
         let scissor = self.swapchain.swap_area();
 

@@ -309,14 +309,15 @@ impl Renderer {
 
         util::swap_acquire_transition(self.device.clone(), &self.command_buffer, swap_image.image);
 
-        let mut clear_value = ash::vk::ClearValue::default();
-        clear_value.depth_stencil = ash::vk::ClearDepthStencilValue::default().depth(1.0);
+        let color_clear_value = ash::vk::ClearValue::default();
+        let mut depth_clear = ash::vk::ClearValue::default();
+        depth_clear.depth_stencil = ash::vk::ClearDepthStencilValue::default().depth(1.0);
 
         let color_attachment_info = ash::vk::RenderingAttachmentInfo::default()
             .image_view(swap_image.view)
             .image_layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .load_op(ash::vk::AttachmentLoadOp::CLEAR)
-            .clear_value(clear_value)
+            .clear_value(color_clear_value)
             .store_op(ash::vk::AttachmentStoreOp::STORE);
 
         let color_attachments = &[color_attachment_info];
@@ -325,7 +326,7 @@ impl Renderer {
             .image_view(self.depth_buffer.image_view)
             .image_layout(ash::vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
             .load_op(ash::vk::AttachmentLoadOp::CLEAR)
-            .clear_value(clear_value)
+            .clear_value(depth_clear)
             .store_op(ash::vk::AttachmentStoreOp::STORE);
 
         let rendering_info = ash::vk::RenderingInfo::default()

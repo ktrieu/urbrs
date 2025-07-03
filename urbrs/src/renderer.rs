@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{ops::Rem, path::Path, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, Context as anyhow_context};
 use bytemuck::bytes_of;
@@ -332,6 +332,8 @@ impl Frame {
     }
 }
 
+const FRAMES_IN_FLIGHT: usize = 3;
+
 pub struct Renderer {
     device: Arc<Device>,
     swapchain: Arc<Swapchain>,
@@ -347,7 +349,8 @@ pub struct Renderer {
 
     depth_buffer: DepthBuffer,
 
-    frame: Frame,
+    frames: Vec<Frame>,
+    frame_idx: usize,
 }
 
 impl Renderer {
@@ -406,12 +409,15 @@ impl Renderer {
         index_buffer.allocate_full()?;
         index_buffer.update_mapped_data(&INDEX_DATA)?;
 
-        let frame = Frame::new(device.clone(), &command_pool)?;
+        let frames = (0..FRAMES_IN_FLIGHT)
+            .map(|_| Frame::new(device.clone(), &command_pool))
+            .collect::<anyhow::Result<Vec<Frame>>>()?;
 
         Ok(Self {
             device,
             swapchain,
-            frame,
+            frames,
+            frame_idx: 0,
             _command_pool: command_pool,
             graphics_pipeline,
             vertex_buffer,
@@ -449,7 +455,12 @@ impl Renderer {
 
         let mvp = projection * view * model;
 
-        let begin_result = self.frame.begin(
+        let frame = self
+            .frames
+            .get_mut(self.frame_idx)
+            .ok_or(anyhow!("invalid frame idx {}", self.frame_idx))?;
+
+        let begin_result = frame.begin(
             self.device.clone(),
             self.swapchain.clone(),
             &self.depth_buffer,
@@ -491,8 +502,9 @@ impl Renderer {
                 .cmd_draw_indexed(command_buffer.handle(), 36, 1, 0, 0, 0);
         }
 
-        self.frame
-            .end(self.device.clone(), self.swapchain.clone(), begin_result)?;
+        frame.end(self.device.clone(), self.swapchain.clone(), begin_result)?;
+
+        self.frame_idx = (self.frame_idx + 1).rem(FRAMES_IN_FLIGHT);
 
         Ok(())
     }

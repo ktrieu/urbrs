@@ -45,7 +45,7 @@ impl Window {
         })
     }
 
-    pub fn render(&self) -> anyhow::Result<()> {
+    pub fn render(&mut self) -> anyhow::Result<()> {
         self.renderer.render()?;
         self.handle.request_redraw();
 

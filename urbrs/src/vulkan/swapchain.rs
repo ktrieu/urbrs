@@ -84,6 +84,10 @@ impl Swapchain {
         Ok(image)
     }
 
+    pub fn get_image(&self, idx: u32) -> Option<&SwapchainImage> {
+        self.images.get(idx as usize)
+    }
+
     unsafe fn new_image_view(
         device: &ash::Device,
         image: ash::vk::Image,

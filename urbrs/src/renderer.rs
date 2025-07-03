@@ -1,6 +1,6 @@
 use std::{path::Path, sync::Arc, time::Instant};
 
-use anyhow::Context as anyhow_context;
+use anyhow::{anyhow, Context as anyhow_context};
 use bytemuck::bytes_of;
 
 use crate::vulkan::{
@@ -168,27 +168,186 @@ impl Drop for DepthBuffer {
     }
 }
 
+struct Frame {
+    render_fence: Fence,
+    swap_acquired: Semaphore,
+    render_complete: Semaphore,
+
+    command_buffer: CommandBuffer,
+}
+
+struct FrameBeginResult<'frame> {
+    command_buffer: &'frame CommandBuffer,
+    swap_image_idx: u32,
+}
+
+impl Frame {
+    fn new(device: Arc<Device>, command_pool: &CommandPool) -> anyhow::Result<Self> {
+        let command_buffer = CommandBuffer::new(device.clone(), command_pool)?;
+        let render_fence = Fence::new(device.clone(), ash::vk::FenceCreateFlags::SIGNALED)?;
+
+        let swap_acquired = Semaphore::new(device.clone(), ash::vk::SemaphoreCreateFlags::empty())?;
+        let render_complete =
+            Semaphore::new(device.clone(), ash::vk::SemaphoreCreateFlags::empty())?;
+
+        Ok(Self {
+            render_fence: render_fence,
+            swap_acquired: swap_acquired,
+            render_complete: render_complete,
+            command_buffer: command_buffer,
+        })
+    }
+
+    fn begin(
+        &self,
+        device: Arc<Device>,
+        swapchain: Arc<Swapchain>,
+        depth_buffer: &DepthBuffer,
+        window_size: winit::dpi::PhysicalSize<u32>,
+    ) -> anyhow::Result<FrameBeginResult> {
+        let wnd_width = window_size.width as f32;
+        let wnd_height = window_size.height as f32;
+
+        // Wait one sec for the fence to be available.
+        self.render_fence.wait(1_000_000_000)?;
+        self.render_fence.reset()?;
+
+        self.command_buffer
+            .begin(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?;
+
+        let swap_image = swapchain.acquire_image(&self.swap_acquired)?;
+
+        util::swap_acquire_transition(device.clone(), &self.command_buffer, swap_image.image);
+
+        let color_clear_value = ash::vk::ClearValue::default();
+        let mut depth_clear = ash::vk::ClearValue::default();
+        depth_clear.depth_stencil = ash::vk::ClearDepthStencilValue::default().depth(1.0);
+
+        let color_attachment_info = ash::vk::RenderingAttachmentInfo::default()
+            .image_view(swap_image.view)
+            .image_layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .load_op(ash::vk::AttachmentLoadOp::CLEAR)
+            .clear_value(color_clear_value)
+            .store_op(ash::vk::AttachmentStoreOp::STORE);
+
+        let color_attachments = &[color_attachment_info];
+
+        let depth_attachment_info = ash::vk::RenderingAttachmentInfo::default()
+            .image_view(depth_buffer.image_view)
+            .image_layout(ash::vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
+            .load_op(ash::vk::AttachmentLoadOp::CLEAR)
+            .clear_value(depth_clear)
+            .store_op(ash::vk::AttachmentStoreOp::STORE);
+
+        let rendering_info = ash::vk::RenderingInfo::default()
+            .color_attachments(color_attachments)
+            .layer_count(1)
+            .depth_attachment(&depth_attachment_info)
+            .render_area(swapchain.swap_area());
+
+        let viewport = ash::vk::Viewport::default()
+            .max_depth(1.0f32)
+            .width(wnd_width)
+            // These are little weird so that we can flip the viewport and have Y up,
+            // like good old OpenGL.
+            .height(-wnd_height)
+            .y(wnd_height);
+
+        let scissor = swapchain.swap_area();
+        let viewports = &[viewport];
+
+        unsafe {
+            device
+                .handle()
+                .cmd_begin_rendering(self.command_buffer.handle(), &rendering_info);
+
+            device
+                .handle()
+                .cmd_set_viewport(self.command_buffer.handle(), 0, viewports);
+
+            let scissors = &[scissor];
+            device
+                .handle()
+                .cmd_set_scissor(self.command_buffer.handle(), 0, scissors);
+        }
+
+        Ok(FrameBeginResult {
+            command_buffer: &self.command_buffer,
+            swap_image_idx: swap_image.idx,
+        })
+    }
+
+    fn end(
+        &self,
+        device: Arc<Device>,
+        swapchain: Arc<Swapchain>,
+        begin_result: FrameBeginResult,
+    ) -> anyhow::Result<()> {
+        let swap_image = swapchain
+            .get_image(begin_result.swap_image_idx)
+            .ok_or(anyhow!("swap image not found"))?;
+
+        unsafe {
+            device
+                .handle()
+                .cmd_end_rendering(self.command_buffer.handle());
+        }
+
+        util::swap_present_transition(device.clone(), &self.command_buffer, swap_image.image);
+
+        self.command_buffer.end()?;
+
+        let wait_submits = &[self
+            .swap_acquired
+            .submit_info(ash::vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)];
+
+        let signal_submits = &[self
+            .render_complete
+            .submit_info(ash::vk::PipelineStageFlags2::ALL_COMMANDS)];
+
+        let buffer_submits = &[self.command_buffer.submit_info()];
+
+        let submit_info = ash::vk::SubmitInfo2::default()
+            .signal_semaphore_infos(signal_submits)
+            .wait_semaphore_infos(wait_submits)
+            .command_buffer_infos(buffer_submits);
+
+        let submits = &[submit_info];
+
+        unsafe {
+            device.handle().queue_submit2(
+                device.graphics_queue().queue,
+                submits,
+                self.render_fence.handle(),
+            )?
+        };
+
+        swapchain.present(
+            swap_image.idx,
+            device.present_queue(),
+            &self.render_complete,
+        )?;
+
+        Ok(())
+    }
+}
+
 pub struct Renderer {
     device: Arc<Device>,
     swapchain: Arc<Swapchain>,
 
     _command_pool: CommandPool,
-    command_buffer: CommandBuffer,
-
-    start: Instant,
-
-    render_fence: Fence,
-    swap_acquired: Semaphore,
-    render_complete: Semaphore,
-
     graphics_pipeline: Pipeline,
 
+    start: Instant,
     window_size: winit::dpi::PhysicalSize<u32>,
 
     vertex_buffer: Buffer,
     index_buffer: Buffer,
 
     depth_buffer: DepthBuffer,
+
+    frame: Frame,
 }
 
 impl Renderer {
@@ -204,13 +363,6 @@ impl Renderer {
             device.graphics_queue(),
             ash::vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
         )?;
-
-        let command_buffer = CommandBuffer::new(device.clone(), &command_pool)?;
-        let render_fence = Fence::new(device.clone(), ash::vk::FenceCreateFlags::SIGNALED)?;
-
-        let swap_acquired = Semaphore::new(device.clone(), ash::vk::SemaphoreCreateFlags::empty())?;
-        let render_complete =
-            Semaphore::new(device.clone(), ash::vk::SemaphoreCreateFlags::empty())?;
 
         let vertex_shader_data = util::read_spirv(Path::new("./data/shader/a.spv.vert"))
             .with_context(|| "failed to read vertex shader a.spv.vert")?;
@@ -254,14 +406,13 @@ impl Renderer {
         index_buffer.allocate_full()?;
         index_buffer.update_mapped_data(&INDEX_DATA)?;
 
+        let frame = Frame::new(device.clone(), &command_pool)?;
+
         Ok(Self {
             device,
             swapchain,
+            frame,
             _command_pool: command_pool,
-            command_buffer,
-            render_fence,
-            swap_acquired,
-            render_complete,
             graphics_pipeline,
             vertex_buffer,
             index_buffer,
@@ -271,11 +422,7 @@ impl Renderer {
         })
     }
 
-    pub fn render(&self) -> anyhow::Result<()> {
-        // Wait one sec for the fence to be available.
-        self.render_fence.wait(1_000_000_000)?;
-        self.render_fence.reset()?;
-
+    pub fn render(&mut self) -> anyhow::Result<()> {
         let wnd_width = self.window_size.width as f32;
         let wnd_height = self.window_size.height as f32;
 
@@ -302,135 +449,50 @@ impl Renderer {
 
         let mvp = projection * view * model;
 
-        self.command_buffer
-            .begin(ash::vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)?;
-
-        let swap_image = self.swapchain.acquire_image(&self.swap_acquired)?;
-
-        util::swap_acquire_transition(self.device.clone(), &self.command_buffer, swap_image.image);
-
-        let color_clear_value = ash::vk::ClearValue::default();
-        let mut depth_clear = ash::vk::ClearValue::default();
-        depth_clear.depth_stencil = ash::vk::ClearDepthStencilValue::default().depth(1.0);
-
-        let color_attachment_info = ash::vk::RenderingAttachmentInfo::default()
-            .image_view(swap_image.view)
-            .image_layout(ash::vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .load_op(ash::vk::AttachmentLoadOp::CLEAR)
-            .clear_value(color_clear_value)
-            .store_op(ash::vk::AttachmentStoreOp::STORE);
-
-        let color_attachments = &[color_attachment_info];
-
-        let depth_attachment_info = ash::vk::RenderingAttachmentInfo::default()
-            .image_view(self.depth_buffer.image_view)
-            .image_layout(ash::vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
-            .load_op(ash::vk::AttachmentLoadOp::CLEAR)
-            .clear_value(depth_clear)
-            .store_op(ash::vk::AttachmentStoreOp::STORE);
-
-        let rendering_info = ash::vk::RenderingInfo::default()
-            .color_attachments(color_attachments)
-            .layer_count(1)
-            .depth_attachment(&depth_attachment_info)
-            .render_area(self.swapchain.swap_area());
-
-        let viewport = ash::vk::Viewport::default()
-            .max_depth(1.0f32)
-            .width(wnd_width)
-            // These are little weird so that we can flip the viewport and have Y up,
-            // like good old OpenGL.
-            .height(-wnd_height)
-            .y(wnd_height);
-
-        let scissor = self.swapchain.swap_area();
+        let begin_result = self.frame.begin(
+            self.device.clone(),
+            self.swapchain.clone(),
+            &self.depth_buffer,
+            self.window_size,
+        )?;
 
         unsafe {
-            self.device
-                .handle()
-                .cmd_begin_rendering(self.command_buffer.handle(), &rendering_info);
-
+            let command_buffer = begin_result.command_buffer;
             self.device.handle().cmd_bind_pipeline(
-                self.command_buffer.handle(),
+                command_buffer.handle(),
                 ash::vk::PipelineBindPoint::GRAPHICS,
                 self.graphics_pipeline.handle(),
             );
 
             self.device.handle().cmd_bind_vertex_buffers(
-                self.command_buffer.handle(),
+                command_buffer.handle(),
                 0,
                 &[self.vertex_buffer.handle()],
                 &[0],
             );
 
             self.device.handle().cmd_bind_index_buffer(
-                self.command_buffer.handle(),
+                command_buffer.handle(),
                 self.index_buffer.handle(),
                 0,
                 ash::vk::IndexType::UINT16,
             );
 
             self.device.handle().cmd_push_constants(
-                self.command_buffer.handle(),
+                command_buffer.handle(),
                 self.graphics_pipeline.layout(),
                 ash::vk::ShaderStageFlags::ALL_GRAPHICS,
                 0,
                 bytes_of(&mvp),
             );
 
-            let viewports = &[viewport];
             self.device
                 .handle()
-                .cmd_set_viewport(self.command_buffer.handle(), 0, viewports);
-
-            let scissors = &[scissor];
-            self.device
-                .handle()
-                .cmd_set_scissor(self.command_buffer.handle(), 0, scissors);
-
-            self.device
-                .handle()
-                .cmd_draw_indexed(self.command_buffer.handle(), 36, 1, 0, 0, 0);
-
-            self.device
-                .handle()
-                .cmd_end_rendering(self.command_buffer.handle());
+                .cmd_draw_indexed(command_buffer.handle(), 36, 1, 0, 0, 0);
         }
 
-        util::swap_present_transition(self.device.clone(), &self.command_buffer, swap_image.image);
-
-        self.command_buffer.end()?;
-
-        let wait_submits = &[self
-            .swap_acquired
-            .submit_info(ash::vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT)];
-
-        let signal_submits = &[self
-            .render_complete
-            .submit_info(ash::vk::PipelineStageFlags2::ALL_COMMANDS)];
-
-        let buffer_submits = &[self.command_buffer.submit_info()];
-
-        let submit_info = ash::vk::SubmitInfo2::default()
-            .signal_semaphore_infos(signal_submits)
-            .wait_semaphore_infos(wait_submits)
-            .command_buffer_infos(buffer_submits);
-
-        let submits = &[submit_info];
-
-        unsafe {
-            self.device.handle().queue_submit2(
-                self.device.graphics_queue().queue,
-                submits,
-                self.render_fence.handle(),
-            )?
-        };
-
-        self.swapchain.present(
-            swap_image.idx,
-            self.device.present_queue(),
-            &self.render_complete,
-        )?;
+        self.frame
+            .end(self.device.clone(), self.swapchain.clone(), begin_result)?;
 
         Ok(())
     }

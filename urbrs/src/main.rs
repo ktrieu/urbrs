@@ -5,6 +5,7 @@ use winit::{
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
 };
 
+mod camera;
 mod renderer;
 mod vulkan;
 mod window;

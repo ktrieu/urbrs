@@ -3,28 +3,31 @@ use std::{ops::Rem, path::Path, sync::Arc, time::Instant};
 use anyhow::{anyhow, Context as anyhow_context};
 use bytemuck::bytes_of;
 
-use crate::vulkan::{
-    buffer::Buffer,
-    command::{CommandBuffer, CommandPool},
-    context::Context,
-    device::Device,
-    mesh::Vertex,
-    phys_device::PhysicalDevice,
-    pipeline::{Pipeline, PipelineBuilder},
-    swapchain::Swapchain,
-    sync::{Fence, Semaphore},
-    util::{self},
+use crate::{
+    camera::Camera,
+    vulkan::{
+        buffer::Buffer,
+        command::{CommandBuffer, CommandPool},
+        context::Context,
+        device::Device,
+        mesh::Vertex,
+        phys_device::PhysicalDevice,
+        pipeline::{Pipeline, PipelineBuilder},
+        swapchain::Swapchain,
+        sync::{Fence, Semaphore},
+        util::{self},
+    },
 };
 
 const VERTEX_DATA: [Vertex; 8] = [
     Vertex::new_pos(0.0, 0.0, 0.0),
     Vertex::new_pos(1.0, 0.0, 0.0),
-    Vertex::new_pos(0.0, -1.0, 0.0),
-    Vertex::new_pos(1.0, -1.0, 0.0),
+    Vertex::new_pos(0.0, 1.0, 0.0),
+    Vertex::new_pos(1.0, 1.0, 0.0),
     Vertex::new_pos(0.0, 0.0, 1.0),
     Vertex::new_pos(1.0, 0.0, 1.0),
-    Vertex::new_pos(0.0, -1.0, 1.0),
-    Vertex::new_pos(1.0, -1.0, 1.0),
+    Vertex::new_pos(0.0, 1.0, 1.0),
+    Vertex::new_pos(1.0, 1.0, 1.0),
 ];
 
 const INDEX_DATA: [u16; 36] = [
@@ -341,6 +344,8 @@ pub struct Renderer {
     _command_pool: CommandPool,
     graphics_pipeline: Pipeline,
 
+    camera: Camera,
+
     start: Instant,
     window_size: winit::dpi::PhysicalSize<u32>,
 
@@ -413,11 +418,17 @@ impl Renderer {
             .map(|_| Frame::new(device.clone(), &command_pool))
             .collect::<anyhow::Result<Vec<Frame>>>()?;
 
+        let camera = Camera::new(
+            glam::vec2(window_size.width as f32, window_size.height as f32),
+            f32::to_radians(45.0),
+        );
+
         Ok(Self {
             device,
             swapchain,
             frames,
             frame_idx: 0,
+            camera,
             _command_pool: command_pool,
             graphics_pipeline,
             vertex_buffer,
@@ -429,31 +440,16 @@ impl Renderer {
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {
-        let wnd_width = self.window_size.width as f32;
-        let wnd_height = self.window_size.height as f32;
-
-        let projection = glam::Mat4::perspective_rh(
-            f32::to_radians(45.0),
-            wnd_width / wnd_height,
-            0.001,
-            1000.0,
-        );
-
         let dt = Instant::now().duration_since(self.start).as_secs_f32();
 
-        let view = glam::Mat4::from_rotation_translation(
-            glam::Quat::from_euler(
-                glam::EulerRot::XYZ,
-                f32::to_radians(45.0),
-                f32::to_radians((dt / 10.0).sin() * 360.0).abs(),
-                0.0,
-            ),
-            glam::vec3(-0.5, 0.5, -3.0),
-        );
+        let pitch = f32::to_radians(-45.0);
+        let yaw = f32::to_radians((dt * 20.0) % 360.0);
 
-        let model = glam::Mat4::IDENTITY;
+        self.camera
+            .set_arcball(glam::vec3(0.5, 0.5, 0.5), glam::vec2(pitch, yaw), 10.0);
 
-        let mvp = projection * view * model;
+        // Identity model matrix for now.
+        let mvp = self.camera.vp();
 
         let frame = self
             .frames

@@ -3,3 +3,6 @@
 
 # renderdoc capture settings
 *.cap
+
+# Blender incremental backups
+*.blend[0-9]*

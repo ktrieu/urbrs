@@ -6,6 +6,8 @@ use std::{
 
 use walkdir::WalkDir;
 
+mod model;
+
 enum RsrcError {
     IoError(io::Error),
     Other(String),

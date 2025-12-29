@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 glam = { version = "0.30.9", features = ["serde", "rkyv"] }
+gltf = "1.4.1"
 rkyv = "0.8.12"
 serde = "1.0.228"
 walkdir = "2"

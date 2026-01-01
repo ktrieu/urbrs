@@ -68,6 +68,7 @@ fn get_output_rel_path(path: &Path) -> RsrcResult<PathBuf> {
     Ok(match ext {
         Some("vert") => get_shader_output_path(path, "vert"),
         Some("frag") => get_shader_output_path(path, "frag"),
+        Some("glb") => path.with_extension("mdl"),
         _ => path.to_path_buf(),
     })
 }
@@ -126,7 +127,7 @@ fn process(source: &Path, dest: &Path) -> RsrcResult<()> {
         Some("frag") => glslc_compile(source, dest),
         Some("glb") => gltf_process(source, dest),
         // No-op, we don't want to process these.
-        Some("blend") => Ok(()),
+        Some("blend") | Some("blend1") => Ok(()),
         _ => basic_copy(source, dest),
     }
 }

@@ -1,7 +1,9 @@
-use std::{ops::Rem, path::Path, sync::Arc, time::Instant};
+use std::{fs::File, io::Read, ops::Rem, path::Path, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, Context as anyhow_context};
 use bytemuck::bytes_of;
+use common::{Model, Vertex};
+use rkyv::rancor;
 
 use crate::{
     camera::Camera,
@@ -10,7 +12,7 @@ use crate::{
         command::{CommandBuffer, CommandPool},
         context::Context,
         device::Device,
-        mesh::Vertex,
+        mesh::MeshVertex,
         phys_device::PhysicalDevice,
         pipeline::{Pipeline, PipelineBuilder},
         swapchain::Swapchain,
@@ -18,26 +20,6 @@ use crate::{
         util::{self},
     },
 };
-
-const VERTEX_DATA: [Vertex; 8] = [
-    Vertex::new_pos(0.0, 0.0, 0.0),
-    Vertex::new_pos(1.0, 0.0, 0.0),
-    Vertex::new_pos(0.0, 1.0, 0.0),
-    Vertex::new_pos(1.0, 1.0, 0.0),
-    Vertex::new_pos(0.0, 0.0, 1.0),
-    Vertex::new_pos(1.0, 0.0, 1.0),
-    Vertex::new_pos(0.0, 1.0, 1.0),
-    Vertex::new_pos(1.0, 1.0, 1.0),
-];
-
-const INDEX_DATA: [u16; 36] = [
-    0, 2, 1, 1, 2, 3, // front
-    5, 6, 4, 5, 7, 6, // back
-    2, 6, 3, 3, 6, 7, // top
-    0, 1, 4, 1, 5, 4, // bottom
-    0, 4, 2, 4, 6, 2, // left
-    1, 3, 5, 5, 3, 7, // right
-];
 
 struct DepthBuffer {
     context: Arc<Context>,
@@ -356,6 +338,9 @@ pub struct Renderer {
 
     frames: Vec<Frame>,
     frame_idx: usize,
+
+    // some hack code to get model rendering working
+    num_indices: u32,
 }
 
 impl Renderer {
@@ -392,27 +377,31 @@ impl Renderer {
             .with_push_constants::<glam::Mat4>()
             .build(device.clone())?;
 
-        // test code to upload the buffer...
-        let size = Vertex::size() * VERTEX_DATA.len();
+        let mut bytes: Vec<u8> = Vec::new();
+        File::open(Path::new("./data/models/jerma.mdl"))?.read_to_end(&mut bytes)?;
+        let archived_model = rkyv::from_bytes::<Model, rancor::Error>(&bytes)?;
+
+        let vert_size = Vertex::size() * archived_model.vertices.len();
+
         let mut vertex_buffer = Buffer::new(
             context.clone(),
-            size,
+            vert_size,
             ash::vk::BufferUsageFlags::VERTEX_BUFFER,
             ash::vk::SharingMode::EXCLUSIVE,
         )?;
 
         vertex_buffer.allocate_full()?;
-        vertex_buffer.update_mapped_data(&VERTEX_DATA)?;
+        vertex_buffer.update_mapped_data(&archived_model.vertices)?;
 
-        let size = size_of::<u16>() * INDEX_DATA.len();
+        let index_size = size_of::<u32>() * archived_model.indices.len();
         let mut index_buffer = Buffer::new(
             context.clone(),
-            size,
+            index_size,
             ash::vk::BufferUsageFlags::INDEX_BUFFER,
             ash::vk::SharingMode::EXCLUSIVE,
         )?;
         index_buffer.allocate_full()?;
-        index_buffer.update_mapped_data(&INDEX_DATA)?;
+        index_buffer.update_mapped_data(&archived_model.indices)?;
 
         let frames = (0..FRAMES_IN_FLIGHT)
             .map(|_| Frame::new(device.clone(), &command_pool))
@@ -436,6 +425,7 @@ impl Renderer {
             window_size,
             start: Instant::now(),
             depth_buffer,
+            num_indices: archived_model.indices.len() as u32,
         })
     }
 
@@ -446,7 +436,7 @@ impl Renderer {
         let yaw = f32::to_radians((dt * 20.0) % 360.0);
 
         self.camera
-            .set_arcball(glam::vec3(0.5, 0.5, 0.5), glam::vec2(pitch, yaw), 10.0);
+            .set_arcball(glam::vec3(0.5, 0.5, 0.5), glam::vec2(pitch, yaw), 50.0);
 
         // Identity model matrix for now.
         let mvp = self.camera.vp();
@@ -482,7 +472,7 @@ impl Renderer {
                 command_buffer.handle(),
                 self.index_buffer.handle(),
                 0,
-                ash::vk::IndexType::UINT16,
+                ash::vk::IndexType::UINT32,
             );
 
             self.device.handle().cmd_push_constants(
@@ -493,9 +483,14 @@ impl Renderer {
                 bytes_of(&mvp),
             );
 
-            self.device
-                .handle()
-                .cmd_draw_indexed(command_buffer.handle(), 36, 1, 0, 0, 0);
+            self.device.handle().cmd_draw_indexed(
+                command_buffer.handle(),
+                self.num_indices,
+                1,
+                0,
+                0,
+                0,
+            );
         }
 
         frame.end(self.device.clone(), self.swapchain.clone(), begin_result)?;

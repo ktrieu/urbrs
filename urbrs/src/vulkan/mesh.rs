@@ -1,11 +1,9 @@
+use common::Vertex;
 use std::mem::offset_of;
 
-// Make this customizable or something later.
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct Vertex {
-    pub position: glam::Vec3,
-    pub color: glam::Vec3,
+pub trait MeshVertex {
+    fn size() -> usize;
+    fn layout() -> VertexLayoutInfo;
 }
 
 pub struct VertexLayoutInfo {
@@ -13,8 +11,8 @@ pub struct VertexLayoutInfo {
     pub bindings: Vec<ash::vk::VertexInputBindingDescription>,
 }
 
-impl Vertex {
-    pub fn layout() -> VertexLayoutInfo {
+impl MeshVertex for Vertex {
+    fn layout() -> VertexLayoutInfo {
         let bindings = vec![ash::vk::VertexInputBindingDescription::default()
             .binding(0)
             .stride(size_of::<Vertex>() as u32)
@@ -30,20 +28,13 @@ impl Vertex {
                 .binding(0)
                 .location(1)
                 .format(ash::vk::Format::R32G32B32_SFLOAT)
-                .offset(offset_of!(Vertex, color) as u32),
+                .offset(offset_of!(Vertex, normal) as u32),
         ];
 
         VertexLayoutInfo { descs, bindings }
     }
 
-    pub fn size() -> usize {
+    fn size() -> usize {
         size_of::<Self>()
-    }
-
-    pub const fn new_pos(x: f32, y: f32, z: f32) -> Self {
-        Self {
-            position: glam::vec3(x, y, z),
-            color: glam::vec3(1.0, 1.0, 1.0),
-        }
     }
 }

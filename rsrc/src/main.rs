@@ -1,15 +1,21 @@
 use std::{
     fmt::Display,
-    fs, io,
+    fs::{self, File},
+    io::{self, Write},
     path::{Path, PathBuf},
 };
 
+use rkyv::rancor;
 use walkdir::WalkDir;
+
+use crate::model::{Model, ModelError};
 
 mod model;
 
 enum RsrcError {
     IoError(io::Error),
+    ModelError(model::ModelError),
+    RkyvError(rancor::Error),
     Other(String),
 }
 
@@ -31,10 +37,18 @@ impl From<String> for RsrcError {
     }
 }
 
+impl From<ModelError> for RsrcError {
+    fn from(value: ModelError) -> Self {
+        RsrcError::ModelError(value)
+    }
+}
+
 impl Display for RsrcError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RsrcError::IoError(error) => write!(f, "io error: {error}"),
+            RsrcError::ModelError(error) => write!(f, "model load error: {error}"),
+            RsrcError::RkyvError(error) => write!(f, "rkyv error: {error}"),
             RsrcError::Other(s) => write!(f, "{s}"),
         }
     }
@@ -73,6 +87,16 @@ fn glslc_compile(source: &Path, dest: &Path) -> RsrcResult<()> {
     }
 }
 
+fn gltf_process(source: &Path, dest: &Path) -> RsrcResult<()> {
+    let model = Model::new_from_gltf_file(source)?;
+
+    let bytes = rkyv::to_bytes::<rancor::Error>(&model).map_err(|e| RsrcError::RkyvError(e))?;
+
+    File::create(dest)?.write_all(&bytes)?;
+
+    Ok(())
+}
+
 fn basic_copy(source: &Path, dest: &Path) -> RsrcResult<()> {
     fs::copy(source, dest)?;
 
@@ -100,6 +124,9 @@ fn process(source: &Path, dest: &Path) -> RsrcResult<()> {
     match ext {
         Some("vert") => glslc_compile(source, dest),
         Some("frag") => glslc_compile(source, dest),
+        Some("glb") => gltf_process(source, dest),
+        // No-op, we don't want to process these.
+        Some("blend") => Ok(()),
         _ => basic_copy(source, dest),
     }
 }

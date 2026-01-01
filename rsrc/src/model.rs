@@ -1,12 +1,15 @@
-use std::path::Path;
+use std::{fmt::Display, path::Path};
 
-use gltf::{Gltf, Primitive, Semantic};
+use gltf::Semantic;
+use rkyv::{Archive, Deserialize, Serialize};
 
+#[derive(Archive, Serialize, Deserialize)]
 pub struct Vertex {
     position: [f32; 3],
     normal: [f32; 3],
 }
 
+#[derive(Archive, Serialize, Deserialize)]
 pub struct Model {
     name: String,
     vertices: Vec<Vertex>,
@@ -24,8 +27,17 @@ impl From<gltf::Error> for ModelError {
     }
 }
 
+impl Display for ModelError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModelError::GltfError(error) => write!(f, "glTF load error: {error}"),
+            ModelError::FormatError(s) => write!(f, "model file format error: {s}"),
+        }
+    }
+}
+
 impl Model {
-    pub fn new_from_gltf_file(path: &str) -> Result<Self, ModelError> {
+    pub fn new_from_gltf_file(path: &Path) -> Result<Self, ModelError> {
         let (file, buffers, _) = gltf::import(path)?;
 
         let scene = file
@@ -86,9 +98,11 @@ impl Model {
                 .into_u32(),
         );
 
-        let name: String = Path::new(path)
+        let name: String = path
             .file_stem()
-            .expect("glTF should be loaded from a path with filename")
+            .ok_or(ModelError::FormatError(
+                "glTF should be loaded from a path with filename",
+            ))?
             .to_string_lossy()
             .to_string();
 

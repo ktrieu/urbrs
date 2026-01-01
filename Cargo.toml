@@ -1,6 +1,6 @@
 [workspace]
 
 resolver = "2"
-members = [ "rsrc",
+members = ["common", "rsrc",
     "urbrs",
 ]

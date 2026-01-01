@@ -24,7 +24,7 @@ impl ShaderModule {
         })
     }
 
-    fn shader_stage_create_info(&self) -> ash::vk::PipelineShaderStageCreateInfo {
+    fn shader_stage_create_info(&'_ self) -> ash::vk::PipelineShaderStageCreateInfo<'_> {
         ash::vk::PipelineShaderStageCreateInfo::default()
             .module(self.handle)
             .name(c"main")

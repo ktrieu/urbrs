@@ -70,7 +70,7 @@ impl CommandBuffer {
         Ok(())
     }
 
-    pub fn submit_info(&self) -> ash::vk::CommandBufferSubmitInfo {
+    pub fn submit_info(&self) -> ash::vk::CommandBufferSubmitInfo<'_> {
         ash::vk::CommandBufferSubmitInfo::default()
             .device_mask(0)
             .command_buffer(self.handle)

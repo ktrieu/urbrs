@@ -202,12 +202,12 @@ impl Frame {
     }
 
     fn begin(
-        &self,
+        &'_ self,
         device: Arc<Device>,
         swapchain: Arc<Swapchain>,
         depth_buffer: &DepthBuffer,
         window_size: winit::dpi::PhysicalSize<u32>,
-    ) -> anyhow::Result<FrameBeginResult> {
+    ) -> anyhow::Result<FrameBeginResult<'_>> {
         let wnd_width = window_size.width as f32;
         let wnd_height = window_size.height as f32;
 

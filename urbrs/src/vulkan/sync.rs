@@ -17,9 +17,9 @@ impl Semaphore {
     }
 
     pub fn submit_info(
-        &self,
+        &'_ self,
         stages: ash::vk::PipelineStageFlags2,
-    ) -> ash::vk::SemaphoreSubmitInfo {
+    ) -> ash::vk::SemaphoreSubmitInfo<'_> {
         ash::vk::SemaphoreSubmitInfo::default()
             .semaphore(self.handle)
             .stage_mask(stages)

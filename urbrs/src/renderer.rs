@@ -432,11 +432,11 @@ impl Renderer {
     pub fn render(&mut self) -> anyhow::Result<()> {
         let dt = Instant::now().duration_since(self.start).as_secs_f32();
 
-        let pitch = f32::to_radians(-45.0);
+        let pitch = f32::to_radians(-15.0);
         let yaw = f32::to_radians((dt * 20.0) % 360.0);
 
         self.camera
-            .set_arcball(glam::vec3(0.5, 0.5, 0.5), glam::vec2(pitch, yaw), 50.0);
+            .set_arcball(glam::vec3(0.5, 0.5, 0.5), glam::vec2(pitch, yaw), 100.0);
 
         // Identity model matrix for now.
         let mvp = self.camera.vp();

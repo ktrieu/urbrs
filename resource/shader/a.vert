@@ -14,7 +14,8 @@ layout (location = 1) out vec3 outNormal;
 void main() 
 {
 	outNormal = normal;
-	outPosition = push_constants.mvp * vec4(position, 1.0);
-
-	gl_Position = outPosition;
+	vec4 projectedPosition = push_constants.mvp * vec4(position, 1.0);
+	
+	outPosition = projectedPosition.xyz;
+	gl_Position = projectedPosition;
 }

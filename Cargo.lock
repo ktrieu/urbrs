@@ -316,6 +316,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "rkyv",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1284,6 +1291,7 @@ dependencies = [
 name = "rsrc"
 version = "0.1.0"
 dependencies = [
+ "common",
  "glam",
  "gltf",
  "rkyv",
@@ -1596,8 +1604,10 @@ dependencies = [
  "ash",
  "ash-window",
  "bytemuck",
+ "common",
  "glam",
  "gpu-allocator",
+ "rkyv",
  "winit",
 ]
 

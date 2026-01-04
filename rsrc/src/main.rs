@@ -8,7 +8,7 @@ use std::{
 use rkyv::rancor;
 use walkdir::WalkDir;
 
-use crate::model::{Model, ModelError};
+use crate::model::{new_model_from_gltf_file, ModelError};
 
 mod model;
 
@@ -89,7 +89,7 @@ fn glslc_compile(source: &Path, dest: &Path) -> RsrcResult<()> {
 }
 
 fn gltf_process(source: &Path, dest: &Path) -> RsrcResult<()> {
-    let model = Model::new_from_gltf_file(source)?;
+    let model = new_model_from_gltf_file(source)?;
 
     let bytes = rkyv::to_bytes::<rancor::Error>(&model).map_err(|e| RsrcError::RkyvError(e))?;
 

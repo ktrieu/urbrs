@@ -1,20 +1,20 @@
 #version 450
 
 layout (location = 0) in vec3 position;
-layout (location = 1) in vec3 color;
+layout (location = 1) in vec3 normal;
 
 layout( push_constant ) uniform constants
 {
 	mat4 mvp;
 } push_constants;
 
-layout (location = 0) out vec3 outColor;
-layout (location = 1) out vec3 outNorm;
+layout (location = 0) out vec3 outPosition;
+layout (location = 1) out vec3 outNormal;
 
 void main() 
 {
-	outNorm = normalize(position);
-	// output the position of each vertex
-	gl_Position = push_constants.mvp * vec4(position, 1.0f);
-	outColor = color;
+	outNormal = normal;
+	outPosition = push_constants.mvp * vec4(position, 1.0);
+
+	gl_Position = outPosition;
 }

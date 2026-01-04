@@ -1,7 +1,7 @@
 use std::{fmt::Display, path::Path};
 
 use common::{Model, Vertex};
-use gltf::Semantic;
+use gltf::{mesh::Mode, Semantic};
 
 pub enum ModelError {
     GltfError(gltf::Error),
@@ -49,13 +49,19 @@ pub fn new_model_from_gltf_file(path: &Path) -> Result<Model, ModelError> {
         return Err(ModelError::FormatError("file had more than one primitive"))?;
     }
 
+    if primitive.mode() != Mode::Triangles {
+        return Err(ModelError::FormatError(
+            "primitive was not in triangle format",
+        ));
+    }
+
     let reader = primitive.reader(|prim_buffer| Some(&buffers[prim_buffer.index()]));
 
     let pos_iter = reader
         .read_positions()
         .ok_or(ModelError::FormatError("mesh had no positions"))?;
     let normal_iter = reader
-        .read_positions()
+        .read_normals()
         .ok_or(ModelError::FormatError("mesh had no normals"))?;
 
     let num_vertices = primitive

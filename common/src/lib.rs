@@ -1,6 +1,6 @@
 use rkyv::{Archive, Deserialize, Serialize};
 
-#[derive(Archive, Serialize, Deserialize)]
+#[derive(Archive, Serialize, Deserialize, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Vertex {
     pub position: [f32; 3],

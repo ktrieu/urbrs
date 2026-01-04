@@ -3,6 +3,7 @@ use std::{
     fs::{self, File},
     io::{self, Write},
     path::{Path, PathBuf},
+    process::exit,
 };
 
 use rkyv::rancor;
@@ -178,5 +179,6 @@ fn main() {
 
     if let Err(e) = result {
         eprintln!("error: {e}");
+        exit(1);
     }
 }

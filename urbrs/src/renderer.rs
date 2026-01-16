@@ -1,6 +1,7 @@
 use std::{fs::File, io::Read, ops::Rem, path::Path, sync::Arc, time::Instant};
 
 use anyhow::{anyhow, Context as anyhow_context};
+use ash::vk::DescriptorType;
 use bytemuck::bytes_of;
 use common::{Model, Vertex};
 use rkyv::rancor;
@@ -11,6 +12,7 @@ use crate::{
         buffer::Buffer,
         command::{CommandBuffer, CommandPool},
         context::Context,
+        descriptor::{DescriptorPool, DescriptorSet, DescriptorSetLayout},
         device::Device,
         mesh::MeshVertex,
         phys_device::PhysicalDevice,
@@ -159,6 +161,7 @@ struct Frame {
     render_complete: Semaphore,
 
     command_buffer: CommandBuffer,
+    scene_descriptor: DescriptorSet,
 }
 
 struct FrameBeginResult<'frame> {
@@ -167,7 +170,11 @@ struct FrameBeginResult<'frame> {
 }
 
 impl Frame {
-    fn new(device: Arc<Device>, command_pool: &CommandPool) -> anyhow::Result<Self> {
+    fn new(
+        device: Arc<Device>,
+        command_pool: &CommandPool,
+        scene_descriptor: DescriptorSet,
+    ) -> anyhow::Result<Self> {
         let command_buffer = CommandBuffer::new(device.clone(), command_pool)?;
         let render_fence = Fence::new(device.clone(), ash::vk::FenceCreateFlags::SIGNALED)?;
 
@@ -180,6 +187,7 @@ impl Frame {
             swap_acquired: swap_acquired,
             render_complete: render_complete,
             command_buffer: command_buffer,
+            scene_descriptor,
         })
     }
 
@@ -339,6 +347,8 @@ pub struct Renderer {
     frames: Vec<Frame>,
     frame_idx: usize,
 
+    _descriptor_pool: Arc<DescriptorPool>,
+
     // some hack code to get model rendering working
     num_indices: u32,
 }
@@ -368,12 +378,25 @@ impl Renderer {
             swapchain.extent().height,
         )?;
 
+        let global_scene_binding = ash::vk::DescriptorSetLayoutBinding::default()
+            .descriptor_count(1)
+            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER);
+
+        let bindings = [global_scene_binding];
+
+        let global_descriptor_layout = Arc::new(DescriptorSetLayout::new(
+            device.clone(),
+            &bindings,
+            ash::vk::DescriptorSetLayoutCreateFlags::empty(),
+        )?);
+
         let graphics_pipeline = PipelineBuilder::new()
             .with_color_format(swapchain.surface_color_format())
             .with_depth_format(depth_buffer.format)
             .with_vertex_shader_data(&vertex_shader_data)
             .with_fragment_shader_data(&fragment_shader_data)
             .with_vertex_layout_info(Vertex::layout())
+            .with_descriptor_set_layouts(&[global_descriptor_layout.clone()])
             .with_push_constants::<glam::Mat4>()
             .build(device.clone())?;
 
@@ -403,8 +426,23 @@ impl Renderer {
         index_buffer.allocate_full()?;
         index_buffer.update_mapped_data(&archived_model.indices)?;
 
+        let descriptor_pool = Arc::new(DescriptorPool::new(
+            device.clone(),
+            DescriptorType::UNIFORM_BUFFER,
+            FRAMES_IN_FLIGHT as u32,
+        )?);
+
         let frames = (0..FRAMES_IN_FLIGHT)
-            .map(|_| Frame::new(device.clone(), &command_pool))
+            .map(|_| {
+                Frame::new(
+                    device.clone(),
+                    &command_pool,
+                    DescriptorSet::alloc_from_pool(
+                        descriptor_pool.clone(),
+                        global_descriptor_layout.handle(),
+                    )?,
+                )
+            })
             .collect::<anyhow::Result<Vec<Frame>>>()?;
 
         let camera = Camera::new(
@@ -425,6 +463,7 @@ impl Renderer {
             window_size,
             start: Instant::now(),
             depth_buffer,
+            _descriptor_pool: descriptor_pool,
             num_indices: archived_model.indices.len() as u32,
         })
     }

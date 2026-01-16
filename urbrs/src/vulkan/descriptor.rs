@@ -31,6 +31,51 @@ impl DescriptorPool {
     }
 }
 
+impl Drop for DescriptorPool {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .handle()
+                .destroy_descriptor_pool(self.handle, None)
+        };
+    }
+}
+
+pub struct DescriptorSetLayout {
+    device: Arc<Device>,
+    handle: ash::vk::DescriptorSetLayout,
+}
+
+impl DescriptorSetLayout {
+    pub fn new<'bindings>(
+        device: Arc<Device>,
+        bindings: &'bindings [ash::vk::DescriptorSetLayoutBinding],
+        flags: ash::vk::DescriptorSetLayoutCreateFlags,
+    ) -> anyhow::Result<Self> {
+        let info = ash::vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(&bindings)
+            .flags(flags);
+
+        let handle = unsafe { device.handle().create_descriptor_set_layout(&info, None) }?;
+
+        Ok(Self { device, handle })
+    }
+
+    pub fn handle(&self) -> ash::vk::DescriptorSetLayout {
+        self.handle
+    }
+}
+
+impl Drop for DescriptorSetLayout {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .handle()
+                .destroy_descriptor_set_layout(self.handle, None)
+        };
+    }
+}
+
 pub struct DescriptorSet {
     handle: ash::vk::DescriptorSet,
     _pool: Arc<DescriptorPool>,

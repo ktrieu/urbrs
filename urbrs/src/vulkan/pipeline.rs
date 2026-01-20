@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::vulkan::descriptor::DescriptorSetLayout;
+
 use super::{device::Device, mesh::VertexLayoutInfo};
 
 struct ShaderModule {
@@ -46,6 +48,7 @@ pub struct Pipeline {
     device: Arc<Device>,
     handle: ash::vk::Pipeline,
     layout: ash::vk::PipelineLayout,
+    descriptor_layouts: Vec<Arc<DescriptorSetLayout>>,
 }
 
 impl Pipeline {
@@ -79,6 +82,7 @@ pub struct PipelineBuilder<'s> {
     push_constant_range: Option<ash::vk::PushConstantRange>,
 
     vertex_layout_info: Option<VertexLayoutInfo>,
+    descriptor_set_layouts: Vec<Arc<DescriptorSetLayout>>,
 }
 
 impl<'s> PipelineBuilder<'s> {
@@ -90,6 +94,7 @@ impl<'s> PipelineBuilder<'s> {
             depth_format: None,
             vertex_layout_info: None,
             push_constant_range: None,
+            descriptor_set_layouts: Vec::new(),
         }
     }
 
@@ -138,6 +143,13 @@ impl<'s> PipelineBuilder<'s> {
 
         Self {
             push_constant_range: Some(range),
+            ..self
+        }
+    }
+
+    pub fn with_descriptor_set_layouts(self, layout: &[Arc<DescriptorSetLayout>]) -> Self {
+        Self {
+            descriptor_set_layouts: Vec::from(layout),
             ..self
         }
     }
@@ -236,8 +248,15 @@ impl<'s> PipelineBuilder<'s> {
             push_constant_ranges.push(range);
         }
 
+        let layouts: Vec<ash::vk::DescriptorSetLayout> = self
+            .descriptor_set_layouts
+            .iter()
+            .map(|l| l.handle())
+            .collect();
+
         let layout_info = ash::vk::PipelineLayoutCreateInfo::default()
-            .push_constant_ranges(&push_constant_ranges);
+            .push_constant_ranges(&push_constant_ranges)
+            .set_layouts(layouts.as_slice());
 
         let layout = unsafe { device.handle().create_pipeline_layout(&layout_info, None)? };
 
@@ -274,6 +293,7 @@ impl<'s> PipelineBuilder<'s> {
             device,
             layout,
             handle,
+            descriptor_layouts: self.descriptor_set_layouts,
         });
     }
 }

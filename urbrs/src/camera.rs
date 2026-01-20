@@ -30,6 +30,14 @@ impl Camera {
         }
     }
 
+    pub fn view(&self) -> glam::Mat4 {
+        self.view
+    }
+
+    pub fn proj(&self) -> glam::Mat4 {
+        self.proj
+    }
+
     pub fn vp(&self) -> glam::Mat4 {
         self.proj * self.view
     }

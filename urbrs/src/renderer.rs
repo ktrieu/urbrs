@@ -327,6 +327,13 @@ impl Frame {
 
 const FRAMES_IN_FLIGHT: usize = 3;
 
+struct GlobalSceneData {
+    view: glam::Mat4,
+    proj: glam::Mat4,
+    // Pre-multiply before we send to the GPU, save us some effort.
+    vp: glam::Mat4,
+}
+
 pub struct Renderer {
     device: Arc<Device>,
     swapchain: Arc<Swapchain>,
@@ -341,6 +348,8 @@ pub struct Renderer {
 
     vertex_buffer: Buffer,
     index_buffer: Buffer,
+
+    uniform_buffer: Buffer,
 
     depth_buffer: DepthBuffer,
 
@@ -380,7 +389,8 @@ impl Renderer {
 
         let global_scene_binding = ash::vk::DescriptorSetLayoutBinding::default()
             .descriptor_count(1)
-            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER);
+            .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER)
+            .stage_flags(ash::vk::ShaderStageFlags::ALL_GRAPHICS);
 
         let bindings = [global_scene_binding];
 
@@ -426,6 +436,14 @@ impl Renderer {
         index_buffer.allocate_full()?;
         index_buffer.update_mapped_data(&archived_model.indices)?;
 
+        let mut uniform_buffer = Buffer::new(
+            context.clone(),
+            FRAMES_IN_FLIGHT * size_of::<GlobalSceneData>(),
+            ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
+            ash::vk::SharingMode::EXCLUSIVE,
+        )?;
+        uniform_buffer.allocate_full()?;
+
         let descriptor_pool = Arc::new(DescriptorPool::new(
             device.clone(),
             DescriptorType::UNIFORM_BUFFER,
@@ -460,6 +478,7 @@ impl Renderer {
             graphics_pipeline,
             vertex_buffer,
             index_buffer,
+            uniform_buffer,
             window_size,
             start: Instant::now(),
             depth_buffer,
@@ -492,6 +511,18 @@ impl Renderer {
             self.window_size,
         )?;
 
+        // The frame has begun, our slice of the uniform buffer is clear to write to.
+        let uniform_idx = self.frame_idx % FRAMES_IN_FLIGHT;
+
+        self.uniform_buffer.update_mapped_element(
+            GlobalSceneData {
+                view: self.camera.view(),
+                proj: self.camera.proj(),
+                vp: self.camera.vp(),
+            },
+            uniform_idx,
+        )?;
+
         unsafe {
             let command_buffer = begin_result.command_buffer;
             self.device.handle().cmd_bind_pipeline(
@@ -499,6 +530,31 @@ impl Renderer {
                 ash::vk::PipelineBindPoint::GRAPHICS,
                 self.graphics_pipeline.handle(),
             );
+
+            self.device.handle().cmd_bind_descriptor_sets(
+                command_buffer.handle(),
+                ash::vk::PipelineBindPoint::GRAPHICS,
+                self.graphics_pipeline.layout(),
+                0,
+                &[frame.scene_descriptor.handle()],
+                &[],
+            );
+
+            let buffer_info = [ash::vk::DescriptorBufferInfo::default()
+                .buffer(self.uniform_buffer.handle())
+                .offset((uniform_idx * size_of::<GlobalSceneData>()) as u64)
+                .range(size_of::<GlobalSceneData>() as u64)];
+
+            let uniform_buffer_write = ash::vk::WriteDescriptorSet::default()
+                .descriptor_count(1)
+                .descriptor_type(ash::vk::DescriptorType::UNIFORM_BUFFER)
+                .dst_set(frame.scene_descriptor.handle())
+                .dst_binding(0)
+                .buffer_info(&buffer_info);
+
+            self.device
+                .handle()
+                .update_descriptor_sets(&[uniform_buffer_write], &[]);
 
             self.device.handle().cmd_bind_vertex_buffers(
                 command_buffer.handle(),

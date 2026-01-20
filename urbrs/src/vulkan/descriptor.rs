@@ -105,4 +105,8 @@ impl DescriptorSet {
             _pool: pool,
         })
     }
+
+    pub fn handle(&self) -> ash::vk::DescriptorSet {
+        self.handle
+    }
 }

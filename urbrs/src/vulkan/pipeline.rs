@@ -48,7 +48,7 @@ pub struct Pipeline {
     device: Arc<Device>,
     handle: ash::vk::Pipeline,
     layout: ash::vk::PipelineLayout,
-    descriptor_layouts: Vec<Arc<DescriptorSetLayout>>,
+    _descriptor_layouts: Vec<Arc<DescriptorSetLayout>>,
 }
 
 impl Pipeline {
@@ -293,7 +293,7 @@ impl<'s> PipelineBuilder<'s> {
             device,
             layout,
             handle,
-            descriptor_layouts: self.descriptor_set_layouts,
+            _descriptor_layouts: self.descriptor_set_layouts,
         });
     }
 }

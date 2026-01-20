@@ -327,6 +327,7 @@ impl Frame {
 
 const FRAMES_IN_FLIGHT: usize = 3;
 
+#[allow(dead_code)] // We don't read these in Rust but we do upload them to the GPU.
 struct GlobalSceneData {
     view: glam::Mat4,
     proj: glam::Mat4,

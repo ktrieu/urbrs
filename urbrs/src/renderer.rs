@@ -23,6 +23,8 @@ use crate::{
     },
 };
 
+mod buffer;
+
 struct DepthBuffer {
     context: Arc<Context>,
     image: ash::vk::Image,

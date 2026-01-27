@@ -15,7 +15,7 @@ pub struct Camera {
 // +X up, +Y right, +Z out of the screen.
 fn compute_proj(screen: glam::Vec2, fov: f32) -> glam::Mat4 {
     let aspect = screen.x / screen.y;
-    glam::Mat4::perspective_rh(fov, aspect, 0.001f32, 1000f32)
+    glam::Mat4::perspective_rh(fov, aspect, 0.01f32, 10000f32)
 }
 
 impl Camera {

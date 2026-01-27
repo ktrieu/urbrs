@@ -109,24 +109,6 @@ impl Buffer {
 
         Ok(())
     }
-
-    // Write a T at idx. TODO: Give this struct a fixed T so it's not possible to allocate with the wrong size.
-    pub fn update_mapped_element<T>(&mut self, data: T, idx: usize) -> anyhow::Result<()> {
-        let offset = idx * size_of::<T>();
-
-        let allocation = self
-            .allocation
-            .as_ref()
-            .ok_or(anyhow::anyhow!("cannot update data for unallocated buffer"))?;
-
-        // This really isn't safe at all.
-        unsafe {
-            let ptr = allocation.mapped_ptr().unwrap().add(offset).as_ptr() as *mut T;
-            ptr.write(data);
-        };
-
-        Ok(())
-    }
 }
 
 impl Drop for Buffer {

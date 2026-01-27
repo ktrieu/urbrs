@@ -1,5 +1,7 @@
 use std::{ffi::c_void, ptr::NonNull, sync::Arc};
 
+use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc};
+
 use super::context::Context;
 
 pub struct Buffer {
@@ -36,25 +38,20 @@ impl Buffer {
         self.handle
     }
 
-    // Make one allocation for the entire buffer. Not very clever - but we're just testing stuff right now.
-    pub fn allocate_full(&mut self) -> anyhow::Result<()> {
-        let requirements = unsafe {
+    pub fn memory_requirements(&self) -> ash::vk::MemoryRequirements {
+        unsafe {
             self.context
                 .device()
                 .handle()
                 .get_buffer_memory_requirements(self.handle)
-        };
+        }
+    }
 
-        let desc = gpu_allocator::vulkan::AllocationCreateDesc {
-            name: "placeholder",
-            requirements,
-            location: gpu_allocator::MemoryLocation::CpuToGpu,
-            linear: true,
-            allocation_scheme: gpu_allocator::vulkan::AllocationScheme::DedicatedBuffer(
-                self.handle,
-            ),
-        };
+    pub fn allocation_mut(&mut self) -> Option<&mut Allocation> {
+        self.allocation.as_mut()
+    }
 
+    pub fn allocate(&mut self, desc: AllocationCreateDesc) -> anyhow::Result<()> {
         let allocation = self.context.alloc_gpu_mem(&desc)?;
 
         unsafe {
@@ -66,6 +63,23 @@ impl Buffer {
         }
 
         self.allocation = Some(allocation);
+
+        Ok(())
+    }
+
+    // Make one allocation for the entire buffer. Not very clever - but we're just testing stuff right now.
+    pub fn allocate_full(&mut self) -> anyhow::Result<()> {
+        let desc = AllocationCreateDesc {
+            name: "placeholder",
+            requirements: self.memory_requirements(),
+            location: gpu_allocator::MemoryLocation::CpuToGpu,
+            linear: true,
+            allocation_scheme: gpu_allocator::vulkan::AllocationScheme::DedicatedBuffer(
+                self.handle,
+            ),
+        };
+
+        self.allocate(desc)?;
 
         Ok(())
     }
@@ -91,24 +105,6 @@ impl Buffer {
                 NonNull::new_unchecked(data.as_ptr() as *mut c_void),
                 self.size as usize,
             );
-        };
-
-        Ok(())
-    }
-
-    // Write a T at idx. TODO: Give this struct a fixed T so it's not possible to allocate with the wrong size.
-    pub fn update_mapped_element<T>(&mut self, data: T, idx: usize) -> anyhow::Result<()> {
-        let offset = idx * size_of::<T>();
-
-        let allocation = self
-            .allocation
-            .as_ref()
-            .ok_or(anyhow::anyhow!("cannot update data for unallocated buffer"))?;
-
-        // This really isn't safe at all.
-        unsafe {
-            let ptr = allocation.mapped_ptr().unwrap().add(offset).as_ptr() as *mut T;
-            ptr.write(data);
         };
 
         Ok(())

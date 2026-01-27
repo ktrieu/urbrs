@@ -5,7 +5,7 @@ use super::{instance::Instance, surface::Surface};
 pub struct PhysicalDevice {
     instance: Arc<Instance>,
     handle: ash::vk::PhysicalDevice,
-    _properties: ash::vk::PhysicalDeviceProperties,
+    properties: ash::vk::PhysicalDeviceProperties,
     _features: ash::vk::PhysicalDeviceFeatures,
     _extensions: Vec<ash::vk::ExtensionProperties>,
     _queue_families: Vec<ash::vk::QueueFamilyProperties>,
@@ -235,7 +235,7 @@ impl PhysicalDevice {
         let phys_device = Self {
             instance,
             handle,
-            _properties: properties,
+            properties,
             _features: features,
             _extensions: extensions,
             _queue_families: queue_families,
@@ -284,5 +284,9 @@ impl PhysicalDevice {
 
     pub fn present_mode(&self) -> ash::vk::PresentModeKHR {
         self.present_mode
+    }
+
+    pub fn limits(&self) -> &ash::vk::PhysicalDeviceLimits {
+        &self.properties.limits
     }
 }

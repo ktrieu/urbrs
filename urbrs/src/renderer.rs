@@ -8,6 +8,7 @@ use rkyv::rancor;
 
 use crate::{
     camera::Camera,
+    renderer::buffer::UniformBuffer,
     vulkan::{
         buffer::Buffer,
         command::{CommandBuffer, CommandPool},
@@ -22,6 +23,8 @@ use crate::{
         util::{self},
     },
 };
+
+mod buffer;
 
 struct DepthBuffer {
     context: Arc<Context>,
@@ -327,6 +330,7 @@ impl Frame {
 
 const FRAMES_IN_FLIGHT: usize = 3;
 
+#[derive(Clone, Copy)]
 #[allow(dead_code)] // We don't read these in Rust but we do upload them to the GPU.
 struct GlobalSceneData {
     view: glam::Mat4,
@@ -350,7 +354,7 @@ pub struct Renderer {
     vertex_buffer: Buffer,
     index_buffer: Buffer,
 
-    uniform_buffer: Buffer,
+    uniform_buffer: UniformBuffer<GlobalSceneData>,
 
     depth_buffer: DepthBuffer,
 
@@ -437,13 +441,12 @@ impl Renderer {
         index_buffer.allocate_full()?;
         index_buffer.update_mapped_data(&archived_model.indices)?;
 
-        let mut uniform_buffer = Buffer::new(
+        let uniform_buffer = UniformBuffer::new(
             context.clone(),
-            FRAMES_IN_FLIGHT * size_of::<GlobalSceneData>(),
-            ash::vk::BufferUsageFlags::UNIFORM_BUFFER,
+            FRAMES_IN_FLIGHT,
             ash::vk::SharingMode::EXCLUSIVE,
+            Some("global_scene_uniforms"),
         )?;
-        uniform_buffer.allocate_full()?;
 
         let descriptor_pool = Arc::new(DescriptorPool::new(
             device.clone(),
@@ -515,7 +518,7 @@ impl Renderer {
         // The frame has begun, our slice of the uniform buffer is clear to write to.
         let uniform_idx = self.frame_idx % FRAMES_IN_FLIGHT;
 
-        self.uniform_buffer.update_mapped_element(
+        self.uniform_buffer.write(
             GlobalSceneData {
                 view: self.camera.view(),
                 proj: self.camera.proj(),
@@ -541,10 +544,7 @@ impl Renderer {
                 &[],
             );
 
-            let buffer_info = [ash::vk::DescriptorBufferInfo::default()
-                .buffer(self.uniform_buffer.handle())
-                .offset((uniform_idx * size_of::<GlobalSceneData>()) as u64)
-                .range(size_of::<GlobalSceneData>() as u64)];
+            let buffer_info = [self.uniform_buffer.descriptor_info(uniform_idx)];
 
             let uniform_buffer_write = ash::vk::WriteDescriptorSet::default()
                 .descriptor_count(1)

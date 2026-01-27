@@ -38,9 +38,10 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Err(err) = self.window.as_mut().unwrap().render() {
             eprintln!("rendering failed: {err:?}");
+            event_loop.exit();
         }
     }
 

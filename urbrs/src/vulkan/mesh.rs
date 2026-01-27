@@ -2,7 +2,6 @@ use common::Vertex;
 use std::mem::offset_of;
 
 pub trait MeshVertex {
-    fn size() -> usize;
     fn layout() -> VertexLayoutInfo;
 }
 
@@ -32,9 +31,5 @@ impl MeshVertex for Vertex {
         ];
 
         VertexLayoutInfo { descs, bindings }
-    }
-
-    fn size() -> usize {
-        size_of::<Self>()
     }
 }

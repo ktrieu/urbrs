@@ -9,7 +9,7 @@ pub struct Mesh {
     vertex_buffer: Buffer,
     index_buffer: Buffer,
 
-    num_vertices: usize,
+    _num_vertices: usize,
     num_indices: usize,
 }
 
@@ -68,7 +68,7 @@ impl Mesh {
         Ok(Self {
             vertex_buffer,
             index_buffer,
-            num_vertices,
+            _num_vertices: num_vertices,
             num_indices,
         })
     }

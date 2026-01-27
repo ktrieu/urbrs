@@ -42,8 +42,6 @@ impl<T: Copy> UniformBuffer<T> {
 
         let size = stride * count;
 
-        dbg!(size);
-
         let mut buffer = Buffer::new(
             context.clone(),
             size,
@@ -82,10 +80,6 @@ impl<T: Copy> UniformBuffer<T> {
             .expect("allocation must be valid slab");
 
         let offset = self.stride * idx;
-
-        dbg!(offset);
-        dbg!(self.stride);
-        dbg!(idx);
 
         presser::copy_to_offset_with_align(&data, &mut slab, offset, self.min_align)?;
 

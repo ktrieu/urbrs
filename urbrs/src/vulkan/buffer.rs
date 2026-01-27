@@ -1,4 +1,4 @@
-use std::{ffi::c_void, ptr::NonNull, sync::Arc};
+use std::sync::Arc;
 
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc};
 
@@ -6,7 +6,7 @@ use super::context::Context;
 
 pub struct Buffer {
     context: Arc<Context>,
-    size: usize,
+    _size: usize,
     handle: ash::vk::Buffer,
 
     allocation: Option<gpu_allocator::vulkan::Allocation>,
@@ -29,7 +29,7 @@ impl Buffer {
         Ok(Self {
             context,
             handle,
-            size,
+            _size: size,
             allocation: None,
         })
     }
@@ -63,49 +63,6 @@ impl Buffer {
         }
 
         self.allocation = Some(allocation);
-
-        Ok(())
-    }
-
-    // Make one allocation for the entire buffer. Not very clever - but we're just testing stuff right now.
-    pub fn allocate_full(&mut self) -> anyhow::Result<()> {
-        let desc = AllocationCreateDesc {
-            name: "placeholder",
-            requirements: self.memory_requirements(),
-            location: gpu_allocator::MemoryLocation::CpuToGpu,
-            linear: true,
-            allocation_scheme: gpu_allocator::vulkan::AllocationScheme::DedicatedBuffer(
-                self.handle,
-            ),
-        };
-
-        self.allocate(desc)?;
-
-        Ok(())
-    }
-
-    // Quick and dirty - send the data direct to the GPU after allocating the memory.
-    pub fn update_mapped_data<T>(&mut self, data: &[T]) -> anyhow::Result<()> {
-        let data_size = data.len() * size_of::<T>();
-
-        if data_size != self.size {
-            return Err(anyhow::anyhow!("data size did not match buffer size"));
-        }
-
-        let allocation = self
-            .allocation
-            .as_ref()
-            .ok_or(anyhow::anyhow!("cannot update data for unallocated buffer"))?;
-
-        unsafe {
-            // Our buffer is host visible because we just asked for it.
-            let ptr = allocation.mapped_ptr().unwrap();
-            ptr.copy_from_nonoverlapping(
-                // And our data pointer is not null because it comes from a valid slice.
-                NonNull::new_unchecked(data.as_ptr() as *mut c_void),
-                self.size as usize,
-            );
-        };
 
         Ok(())
     }

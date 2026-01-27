@@ -8,9 +8,8 @@ use rkyv::rancor;
 
 use crate::{
     camera::Camera,
-    renderer::buffer::UniformBuffer,
+    renderer::{buffer::UniformBuffer, mesh::Mesh},
     vulkan::{
-        buffer::Buffer,
         command::{CommandBuffer, CommandPool},
         context::Context,
         descriptor::{DescriptorPool, DescriptorSet, DescriptorSetLayout},
@@ -25,6 +24,7 @@ use crate::{
 };
 
 mod buffer;
+mod mesh;
 
 struct DepthBuffer {
     context: Arc<Context>,
@@ -351,9 +351,7 @@ pub struct Renderer {
     start: Instant,
     window_size: winit::dpi::PhysicalSize<u32>,
 
-    vertex_buffer: Buffer,
-    index_buffer: Buffer,
-
+    mesh: Mesh,
     uniform_buffer: UniformBuffer<GlobalSceneData>,
 
     depth_buffer: DepthBuffer,
@@ -362,9 +360,6 @@ pub struct Renderer {
     frame_idx: usize,
 
     _descriptor_pool: Arc<DescriptorPool>,
-
-    // some hack code to get model rendering working
-    num_indices: u32,
 }
 
 impl Renderer {
@@ -418,28 +413,7 @@ impl Renderer {
         let mut bytes: Vec<u8> = Vec::new();
         File::open(Path::new("./data/models/jerma.mdl"))?.read_to_end(&mut bytes)?;
         let archived_model = rkyv::from_bytes::<Model, rancor::Error>(&bytes)?;
-
-        let vert_size = Vertex::size() * archived_model.vertices.len();
-
-        let mut vertex_buffer = Buffer::new(
-            context.clone(),
-            vert_size,
-            ash::vk::BufferUsageFlags::VERTEX_BUFFER,
-            ash::vk::SharingMode::EXCLUSIVE,
-        )?;
-
-        vertex_buffer.allocate_full()?;
-        vertex_buffer.update_mapped_data(&archived_model.vertices)?;
-
-        let index_size = size_of::<u32>() * archived_model.indices.len();
-        let mut index_buffer = Buffer::new(
-            context.clone(),
-            index_size,
-            ash::vk::BufferUsageFlags::INDEX_BUFFER,
-            ash::vk::SharingMode::EXCLUSIVE,
-        )?;
-        index_buffer.allocate_full()?;
-        index_buffer.update_mapped_data(&archived_model.indices)?;
+        let mesh = Mesh::new_from_model(context.clone(), &archived_model)?;
 
         let uniform_buffer = UniformBuffer::new(
             context.clone(),
@@ -480,14 +454,12 @@ impl Renderer {
             camera,
             _command_pool: command_pool,
             graphics_pipeline,
-            vertex_buffer,
-            index_buffer,
+            mesh,
             uniform_buffer,
             window_size,
             start: Instant::now(),
             depth_buffer,
             _descriptor_pool: descriptor_pool,
-            num_indices: archived_model.indices.len() as u32,
         })
     }
 
@@ -557,19 +529,7 @@ impl Renderer {
                 .handle()
                 .update_descriptor_sets(&[uniform_buffer_write], &[]);
 
-            self.device.handle().cmd_bind_vertex_buffers(
-                command_buffer.handle(),
-                0,
-                &[self.vertex_buffer.handle()],
-                &[0],
-            );
-
-            self.device.handle().cmd_bind_index_buffer(
-                command_buffer.handle(),
-                self.index_buffer.handle(),
-                0,
-                ash::vk::IndexType::UINT32,
-            );
+            self.mesh.bind(self.device.clone(), &command_buffer);
 
             self.device.handle().cmd_push_constants(
                 command_buffer.handle(),
@@ -581,7 +541,7 @@ impl Renderer {
 
             self.device.handle().cmd_draw_indexed(
                 command_buffer.handle(),
-                self.num_indices,
+                self.mesh.num_indices() as u32,
                 1,
                 0,
                 0,

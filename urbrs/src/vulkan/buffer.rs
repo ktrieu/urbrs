@@ -47,8 +47,8 @@ impl Buffer {
         }
     }
 
-    pub fn allocation(&self) -> Option<&Allocation> {
-        self.allocation.as_ref()
+    pub fn allocation_mut(&mut self) -> Option<&mut Allocation> {
+        self.allocation.as_mut()
     }
 
     pub fn allocate(&mut self, desc: AllocationCreateDesc) -> anyhow::Result<()> {

@@ -13,3 +13,4 @@ anyhow = "1.0.97"
 bytemuck = "1.22.0"
 common = { version = "0.1.0", path = "../common" }
 rkyv = "0.8.12"
+presser = "0.3.1"

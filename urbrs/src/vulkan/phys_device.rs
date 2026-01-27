@@ -285,4 +285,8 @@ impl PhysicalDevice {
     pub fn present_mode(&self) -> ash::vk::PresentModeKHR {
         self.present_mode
     }
+
+    pub fn limits(&self) -> &ash::vk::PhysicalDeviceLimits {
+        &self._properties.limits
+    }
 }

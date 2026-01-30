@@ -7,6 +7,7 @@ use winit::{
 
 mod camera;
 mod renderer;
+mod terrain;
 mod vulkan;
 mod window;
 
